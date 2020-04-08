@@ -30,6 +30,8 @@ protected:
     void mousePressEvent(QMouseEvent *e);
     void mouseReleaseEvent(QMouseEvent *e);
     void mouseMoveEvent(QMouseEvent *e);
+signals:
+    void selectK(KData* k);//无需实现
 };
 
 #endif // KMAPWIDGET_H

@@ -29,6 +29,8 @@ private slots:
     void on_listWidget_currentRowChanged(int currentRow);
 
     void on_req_stock(QString code);
+
+    void on_k_select(KData* k);
 private:
     Ui::MainWindow *ui;
     AraleStock mStock;

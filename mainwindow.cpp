@@ -1,4 +1,5 @@
 #include <QtDebug>
+#include <QDate>
 #include "MainWindow.h"
 #include "ui_mainwindow.h"
 #include "listitem.h"
@@ -9,6 +10,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    connect(ui->kmap, SIGNAL(selectK(KData*)), this, SLOT(on_k_select(KData*)) );
+
     QString err = mStock.init();
     if(err!=nullptr)
     {
@@ -39,6 +42,34 @@ MainWindow::~MainWindow()
 void MainWindow::on_req_stock(QString code)
 {
     mStock.reqStock(code);
+}
+
+void MainWindow::on_k_select(KData* k)
+{
+    if(k!=nullptr)
+    {
+        QDate date = QDate::fromString(k->date,"yyyy-MM-dd");
+        QString ds = date.toString("yy/MM/dd/dddd").remove(9,2);
+        ui->lbDate->setText(ds);
+        ui->lbOpen->setText(QString::asprintf("开 %0.2f",k->open));
+        ui->lbClose->setText(QString::asprintf("收 %0.2f",k->close));
+        ui->lbHigh->setText(QString::asprintf("高 %0.2f",k->high));
+        ui->lbLow->setText(QString::asprintf("低 %0.2f",k->low));
+        ui->lbVolume->setText(QString::asprintf("量 %0.2f",k->volume));
+        ui->lbAmount->setText(QString::asprintf("额 %0.2f",0));
+        ui->lbChg->setText(QString::asprintf("涨 %0.2f",0));
+    }
+    else
+    {
+        ui->lbDate->setText("");
+        ui->lbOpen->setText("");
+        ui->lbClose->setText("");
+        ui->lbHigh->setText("");
+        ui->lbLow->setText("");
+        ui->lbVolume->setText("");
+        ui->lbAmount->setText("");
+        ui->lbChg->setText("");
+    }
 }
 
 void MainWindow::on_pushButton_clicked()

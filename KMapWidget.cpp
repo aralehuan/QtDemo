@@ -56,8 +56,8 @@ void KMapWidget::paintEvent(QPaintEvent * event)
         }
         else if(k->close<k->open)
         {
-            painter.setBrush(Qt::green);
-            painter.setPen(Qt::green);
+            painter.setBrush(QColor(0,160,0));
+            painter.setPen(QColor(0,160,0));
         }
         else
         {
@@ -91,6 +91,12 @@ void KMapWidget::drawMark(QPainter& painter, float high, float low)
     float price = low + 1.0f*(mH-mMarkY)/mH*(high-low);
     painter.setPen(Qt::red);
     painter.drawText(0,mMarkY, QString::number(price,'f',2));
+
+
+    int count = mStock->history.count();
+    int idx = mMarkX/mKW;
+    KData* k = idx>=count?nullptr:mStock->history[idx];
+    emit selectK(k);
 }
 
 void KMapWidget::mousePressEvent(QMouseEvent *e)
@@ -102,11 +108,16 @@ void KMapWidget::mousePressEvent(QMouseEvent *e)
         mMarkY = e->y();
         this->update();
     }
+    else if(e->button() & Qt::LeftButton)
+    {
+
+    }
 }
 
 void KMapWidget::mouseReleaseEvent(QMouseEvent *e)
 {
     mMark = false;
+    this->update();
 }
 
 void KMapWidget::mouseMoveEvent(QMouseEvent *e)
