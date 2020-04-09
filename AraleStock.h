@@ -17,6 +17,7 @@ public:
     float open;
     float close;
     double volume;
+    float ma5;
 };
 
 class Stock

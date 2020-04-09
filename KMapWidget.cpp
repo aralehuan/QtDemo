@@ -2,9 +2,27 @@
 #include <QPainter>
 #include <QDebug>
 #include <QEvent>
+#include <QFont>
+#include <QVector>
 
-KMapWidget::KMapWidget(QWidget *parent) : QWidget(parent),mKW(9),mStock(nullptr),mMark(false)
+KMapWidget::KMapWidget(QWidget *parent) : QWidget(parent)
+  ,mKW(9)
+  ,mStock(nullptr)
+  ,mMark(false)
+  ,mPressX(0)
+  ,mScrollX(0)
+  ,mLastScrollX (0)
 {
+}
+
+void KMapWidget::setStock(Stock* stock)
+{
+    if(stock!=mStock)
+    {
+       mLastScrollX =  mScrollX = mPressX  = 0;
+    }
+    mStock = stock;
+    update();
 }
 
 bool KMapWidget::event(QEvent *event)
@@ -17,6 +35,7 @@ bool KMapWidget::event(QEvent *event)
             QResizeEvent* re = static_cast<QResizeEvent*>(event);
             mW = re->size().width();
             mH = re->size().height();
+            adjustScroll();
             return true;
         }
     default:
@@ -30,23 +49,43 @@ void KMapWidget::paintEvent(QPaintEvent * event)
     drawBack(painter);
     if(mStock==nullptr || mStock->history.isEmpty())return;
     painter.setBrush(Qt::SolidPattern);
-    int days = mW / mKW;//最多显示多少天/*
+    //从右往左绘制k节点，mStock最前面的为最新记录
+    int days = mW / mKW;//最多显示多少天
     int count = mStock->history.length();
-    float x = 0;
-    float o = mKW/2;
-    float high = 0;
-    float low  = 10000;
-
-    for(int i=0,max=days<count?days:count;i<max;++i)
-    {//获取区间最低价和最高价
-        KData* k = mStock->history[i];
-        if(high<k->high)high=k->high;
-        if(low>k->low)low=k->low;
-    }
-
-    float pixel = 1.0f*mH/(high-low);
-    for(int i=0,max=days<count?days:count;i<max;++i)
+    int rightK=  mScrollX/mKW;
+    int leftK  =  rightK + days;
+    if(leftK>count)leftK=count;
+     //qDebug()<<mScrollX<<","<<rightK<<","<<leftK<<","<<count<<","<<days;
+    //计算区间最低最高价
+    mHigh = 0;
+    mLow  = 10000;
+    for(int i=rightK;i<leftK;++i)
     {
+        KData* k = mStock->history[i];
+        if(mHigh<k->high)mHigh=k->high;
+        if(mLow>k->low)mLow=k->low;
+    }
+    drawKNode(painter, rightK, leftK);
+    drawMark(painter, rightK, leftK);
+    //标线价
+    painter.setFont(QFont(QString("Times New Roman"), 5));
+    painter.setPen(Qt::black);
+    int fontHight = painter.fontMetrics().height();
+    painter.drawText(0,  fontHight, QString::number(mHigh,'f',2));
+    painter.drawText(0,  0.25f*mH, QString::number(mLow+0.75f*(mHigh-mLow),'f',2));
+    painter.drawText(0,  0.50f*mH, QString::number(mLow+0.50f*(mHigh-mLow),'f',2));
+    painter.drawText(0,  0.75f*mH, QString::number(mLow+0.25f*(mHigh-mLow),'f',2));
+    painter.drawText(0,  mH, QString::number(mLow,'f',2));
+}
+
+ void KMapWidget::drawKNode(QPainter& painter, int rightK, int leftK)
+ {//从右向左绘制
+     float x = (leftK-rightK-1)*mKW;
+     float halfKW = mKW/2;
+     float pixel = 1.0f*mH/(mHigh-mLow);
+     QVector<QLineF> lines;
+     for(int i=rightK;i<leftK;++i)
+     {
         KData* k = mStock->history[i];
         float up = k->open>k->close?k->open:k->close;
         if(k->close>k->open)
@@ -65,13 +104,24 @@ void KMapWidget::paintEvent(QPaintEvent * event)
             painter.setPen(Qt::black);
         }
 
-        painter.drawLine(x+o,(high - k->high)*pixel, x+o, (high - k->low)*pixel);
-        painter.drawRect(x,(high - up)*pixel, mKW-1, abs(k->close-k->open)*pixel);
-        x+=mKW;
-    }
-    //painter.drawText(0,24,QString("helloworld"));
-    drawMark(painter,high,low);
-}
+        painter.drawLine(x+halfKW,(mHigh - k->high)*pixel, x+halfKW, (mHigh - k->low)*pixel);
+        painter.drawRect(x,(mHigh - up)*pixel, mKW-1, abs(k->close-k->open)*pixel);
+        //计算5日均线坐标
+        float nextma = i+1<mStock->history.count()? mStock->history[i+1]->ma5:k->ma5;
+        if(nextma==0)nextma = k->ma5;
+        lines.append(QLineF(x+halfKW, (mHigh - k->ma5)*pixel, x-halfKW,   (mHigh -nextma)*pixel));
+        x-=mKW;
+     }
+     //绘制均线
+     QPen pen(Qt::SolidLine);
+     pen.setWidthF(0.5f);
+     pen.setColor(Qt::blue);
+     pen.setJoinStyle(Qt::RoundJoin);
+     painter.setPen(pen);
+     painter.setRenderHint(QPainter::Antialiasing);
+     painter.drawLines(lines);;
+     painter.setRenderHint(QPainter::Antialiasing,false);
+ }
 
 void KMapWidget::drawBack(QPainter& painter)
 {
@@ -82,20 +132,29 @@ void KMapWidget::drawBack(QPainter& painter)
     painter.drawLine(0,0.75f*mH, mW, 0.75f*mH);
 }
 
-void KMapWidget::drawMark(QPainter& painter, float high, float low)
+void KMapWidget::drawMark(QPainter& painter, int rightK, int leftK)
 {
     if(!mMark)return;
+    if(mMarkX<mKW/2)mMarkX=mKW/2;
+    if(mMarkX>(leftK-rightK)*mKW-mKW/2)mMarkX=(leftK-rightK)*mKW-mKW/2;
+    if(mMarkY<0)mMarkY=0;
+     if(mMarkY>mH)mMarkY=mH;
+
     painter.setPen(Qt::black);
     painter.drawLine(0,mMarkY,mW,mMarkY);
     painter.drawLine(mMarkX,0,mMarkX,mH);
-    float price = low + 1.0f*(mH-mMarkY)/mH*(high-low);
+    float price = mLow + 1.0f*(mH-mMarkY)/mH*(mHigh-mLow);
+     int fontHight = painter.fontMetrics().height();
+     float priceY = mMarkY-fontHight/2;
+     if(priceY<0)priceY=0;
+     if(priceY>mH-fontHight)priceY=mH-fontHight;
+     painter.setBrush(Qt::black);
+    painter.drawRect(0,priceY,36,fontHight);
     painter.setPen(Qt::red);
-    painter.drawText(0,mMarkY, QString::number(price,'f',2));
+    painter.drawText(0,priceY+fontHight, QString::number(price,'f',2));
 
-
-    int count = mStock->history.count();
-    int idx = mMarkX/mKW;
-    KData* k = idx>=count?nullptr:mStock->history[idx];
+    int idx = leftK-mMarkX/mKW-1;
+    KData* k = idx<0?nullptr:mStock->history[idx];
     emit selectK(k);
 }
 
@@ -110,7 +169,9 @@ void KMapWidget::mousePressEvent(QMouseEvent *e)
     }
     else if(e->button() & Qt::LeftButton)
     {
-
+        mLastScrollX = mScrollX;
+        mPressX = e->x();
+        this->update();
     }
 }
 
@@ -122,7 +183,25 @@ void KMapWidget::mouseReleaseEvent(QMouseEvent *e)
 
 void KMapWidget::mouseMoveEvent(QMouseEvent *e)
 {
-    mMarkX = e->x()/mKW*mKW+mKW/2;
-    mMarkY = e->y();
-    this->update();
+    if(mMark)
+    {
+        mMarkX = e->x()/mKW*mKW+mKW/2;
+        mMarkY = e->y();
+        this->update();
+    }
+    else
+    {
+        mScrollX = mLastScrollX+e->x()-mPressX;
+        adjustScroll();
+        this->update();
+    }
+}
+
+void KMapWidget::adjustScroll()
+{
+    if(mStock==nullptr)return;
+    int count = mStock->history.length();
+    float contentSize = count*mKW;
+    if(mScrollX>(contentSize - mW+mKW))mScrollX=contentSize - mW+mKW;
+    if(mScrollX<0)mScrollX=0;
 }

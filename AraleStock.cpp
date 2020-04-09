@@ -70,7 +70,8 @@ QString AraleStock::loadKData(Stock* stock)
         k->open = r.value("open").toFloat();
         k->close = r.value("close").toFloat();
         k->volume = r.value("volume").toDouble();
-        stock->history.insert(0,k);
+        k->ma5 =  r.value("ma5").toFloat();
+        stock->history.append(k);
     }
     return  nullptr;
 }
@@ -182,16 +183,18 @@ QString AraleStock::reqStock(QString code)
         k->low = data.value("low").toVariant().toFloat();
         k->close = data.value("close").toVariant().toFloat();
         k->volume = data.value("volume").toVariant().toDouble();
+        k->ma5 = data.value("ma5").toVariant().toDouble();
         ls.append(k);
-        QString sql = QString("INSERT OR IGNORE INTO %1 (date,high,open,close,low,volume) VALUES \
+        QString sql = QString("INSERT OR IGNORE INTO %1 (date,high,open,close,low,volume,ma5) VALUES \
                 (  \
                 '%2', \
                 %3, \
                 %4, \
                 %5, \
                 %6, \
-                %7 \
-                );").arg(tbName).arg(k->date).arg(k->high).arg(k->open).arg(k->close).arg(k->low).arg(k->volume);
+                %7, \
+                %8  \
+                );").arg(tbName).arg(k->date).arg(k->high).arg(k->open).arg(k->close).arg(k->low).arg(k->volume).arg(k->ma5);
         QSqlQuery query;
         query.prepare(sql);
         if(!query.exec())
@@ -242,7 +245,7 @@ QString AraleStock::createStockTable()
     {
         QString sql = "CREATE TABLE Stocks \
                 ( \
-                code varchar(10) NOT NULL, \
+                code varchar(10) PRIMARY KEY, \
                 name varchar(32) NOT NULL, \
                 total decimal(5,2) \
                 );";
@@ -259,12 +262,13 @@ QString AraleStock::createStockTable(QString tbName)
     {
         QString sql = QString("CREATE TABLE %1 \
                 ( \
-                date varchar(12) NOT NULL, \
+                date varchar(12) PRIMARY KEY, \
                 high decimal(5,2), \
                 open decimal(5,2), \
                 close decimal(5,2), \
                 low decimal(5,2), \
-                volume decimal(8,2) \
+                volume decimal(8,2), \
+                ma5 decimal(5,2) \
                 );").arg(tbName);
         QSqlQuery query;
         query.prepare(sql);
