@@ -1,3 +1,4 @@
+#pragma warning(disable:4819)
 #include "KMapWidget.h"
 #include <QPainter>
 #include <QDebug>
@@ -34,7 +35,9 @@ bool KMapWidget::event(QEvent *event)
         {
             QResizeEvent* re = static_cast<QResizeEvent*>(event);
             mW = re->size().width();
-            mH = re->size().height();
+            int h = re->size().height();
+            mH2 = (h-24)/3;
+            mH = 2*mH2;
             adjustScroll();
             return true;
         }
@@ -59,11 +62,13 @@ void KMapWidget::paintEvent(QPaintEvent * event)
     //计算区间最低最高价
     mHigh = 0;
     mLow  = 10000;
+    mHighVol = 0;
     for(int i=rightK;i<leftK;++i)
     {
         KData* k = mStock->history[i];
         if(mHigh<k->high)mHigh=k->high;
         if(mLow>k->low)mLow=k->low;
+        if(mHighVol<k->volume)mHighVol=k->volume;
     }
     drawKNode(painter, rightK, leftK);
     drawMark(painter, rightK, leftK);
@@ -76,6 +81,8 @@ void KMapWidget::paintEvent(QPaintEvent * event)
     painter.drawText(0,  0.50f*mH, QString::number(mLow+0.50f*(mHigh-mLow),'f',2));
     painter.drawText(0,  0.75f*mH, QString::number(mLow+0.25f*(mHigh-mLow),'f',2));
     painter.drawText(0,  mH, QString::number(mLow,'f',2));
+    //量图
+    drawVolume(painter, rightK, leftK);
 }
 
  void KMapWidget::drawKNode(QPainter& painter, int rightK, int leftK)
@@ -105,7 +112,7 @@ void KMapWidget::paintEvent(QPaintEvent * event)
         }
 
         painter.drawLine(x+halfKW,(mHigh - k->high)*pixel, x+halfKW, (mHigh - k->low)*pixel);
-        painter.drawRect(x,(mHigh - up)*pixel, mKW-1, abs(k->close-k->open)*pixel);
+        painter.drawRect(x+1,(mHigh - up)*pixel, mKW-2, abs(k->close-k->open)*pixel);
         //计算5日均线坐标
         float nextma = i+1<mStock->history.count()? mStock->history[i+1]->ma5:k->ma5;
         if(nextma==0)nextma = k->ma5;
@@ -156,6 +163,54 @@ void KMapWidget::drawMark(QPainter& painter, int rightK, int leftK)
     int idx = leftK-mMarkX/mKW-1;
     KData* k = idx<0?nullptr:mStock->history[idx];
     emit selectK(k);
+}
+
+void KMapWidget::drawVolume(QPainter& painter, int rightK, int leftK)
+{
+    //背景框
+    painter.translate(0, mH+24);
+    painter.setPen(QColor(240,240,240));
+    painter.setBrush(Qt::white);
+    painter.drawRect(0,0,mW-1,mH2-1);
+
+    float x = (leftK-rightK-1)*mKW;
+    float halfKW = mKW/2;
+    float pixel = 1.0f*mH2/mHighVol;
+    QVector<QLineF> lines;
+    for(int i=rightK;i<leftK;++i)
+    {
+       KData* k = mStock->history[i];
+       float up = k->open>k->close?k->open:k->close;
+       if(k->close>k->open)
+       {
+           painter.setBrush(Qt::white);
+           painter.setPen(Qt::red);
+       }
+       else if(k->close<k->open)
+       {
+           painter.setBrush(QColor(0,160,0));
+           painter.setPen(QColor(0,160,0));
+       }
+       else
+       {
+           painter.setBrush(Qt::black);
+           painter.setPen(Qt::black);
+       }
+
+       painter.drawRect(x+1,mH2-k->volume*pixel, mKW-2, k->volume*pixel);
+       x-=mKW;
+    }
+    //标线
+    if(mMark)
+    {
+        painter.setPen(Qt::black);
+        painter.drawLine(mMarkX,0,mMarkX,mH2);
+    }
+    //最高量
+    painter.setFont(QFont(QString("Times New Roman"), 5));
+    painter.setPen(Qt::black);
+    int fontHight = painter.fontMetrics().height();
+    painter.drawText(0,  fontHight, QString::number(mHighVol,'f',2));
 }
 
 void KMapWidget::mousePressEvent(QMouseEvent *e)

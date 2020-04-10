@@ -1,6 +1,6 @@
-#include "MainWindow.h"
 #include <QApplication>
 #include <QTextCodec>
+#include "MainWindow.h"
 #include "stockdata.h"
 int main(int argc, char *argv[])
 {

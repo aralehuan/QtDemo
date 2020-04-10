@@ -5,8 +5,10 @@
 #include <QJsonObject>
 #include <QDebug>
 #include <QJsonArray>
+#include <QDate>
 #include "AraleStock.h"
 
+PyObject* gPythonMod=nullptr;
 AraleStock::AraleStock()
 {
 
@@ -21,8 +23,11 @@ QString AraleStock::init()
         if(!mDB.open())return QString("database connect failed");
         Py_Initialize();
         if(!Py_IsInitialized())return QString("Python init failed");
+        gPythonMod = PyImport_ImportModule("tusharedemo");
+        if(gPythonMod==nullptr)return QString("tusharedemo.py script error");
         mThread.start();
         this->moveToThread(&mThread);
+        mPool.setMaxThreadCount(1);
     }
     while (false);
     return nullptr;
@@ -38,6 +43,7 @@ void AraleStock::deinit()
 
 QString AraleStock::loadStocks()
 {
+    QString date = QDate::currentDate().toString("yyyy-MM-dd");
     mStocks.clear();
     QSqlQuery query;
     query.prepare(QString("SELECT * From Stocks"));
@@ -50,6 +56,11 @@ QString AraleStock::loadStocks()
         sk->name = r.value("name").toString();
         mStocks.append(sk);
         loadKData(sk);
+
+        if(sk->history.isEmpty()||sk->history[0]->date!=date)
+        {//数据不是最新
+            mPool.start(new PullTask(sk));
+        }
     }
     return  nullptr;
 }
@@ -78,8 +89,7 @@ QString AraleStock::loadKData(Stock* stock)
 
 QString AraleStock::reqStocks()
 {
-    PyObject* pyMod = PyImport_ImportModule("tusharedemo");
-    PyObject* pyFunc = PyObject_GetAttrString(pyMod,"get_ticket");
+    PyObject* pyFunc = PyObject_GetAttrString(gPythonMod,"get_tickets");
     PyObject* pyRet  = PyObject_CallObject(pyFunc, nullptr);
     char* json;
     PyArg_Parse(pyRet,"s",&json);
@@ -151,8 +161,7 @@ QString AraleStock::reqStocks()
 
 QString AraleStock::reqStock(QString code)
 {
-    PyObject* pyMod = PyImport_ImportModule("tusharedemo");
-    PyObject* pyFunc = PyObject_GetAttrString(pyMod,"get_ticket");
+    PyObject* pyFunc = PyObject_GetAttrString(gPythonMod,"get_ticket");
     PyObject *pArgs = PyTuple_New(1);
     PyTuple_SetItem(pArgs, 0, Py_BuildValue("s", code.toLatin1().data()));
     PyObject* pyRet  = PyObject_CallObject(pyFunc, pArgs);
@@ -275,4 +284,44 @@ QString AraleStock::createStockTable(QString tbName)
         if(!query.exec())return QString("create table failed");
     }while (0);
     return nullptr;
+}
+
+
+void PullTask::run()
+{
+    QDate now = QDate::currentDate();
+    QString date = now.toString("yyyy-MM-dd");
+    QString begin=stock->history.isEmpty()?QString("%1-01-01").arg(now.year()):stock->history[0]->date;
+    //拉取最新数据
+    PyObject* pyFunc = PyObject_GetAttrString(gPythonMod,"get_ticket");
+    PyObject *pArgs = PyTuple_New(3);
+    PyTuple_SetItem(pArgs, 0, Py_BuildValue("s", stock->code.toLatin1().data()));
+    PyTuple_SetItem(pArgs, 1, Py_BuildValue("s", begin.toLatin1().data()));
+    PyTuple_SetItem(pArgs, 2, Py_BuildValue("s", date.toLatin1().data()));
+    PyObject* pyRet  = PyObject_CallObject(pyFunc, pArgs);
+    char* json;
+    PyArg_Parse(pyRet,"s",&json);
+    if(json==nullptr)return;
+    //json数据解析
+    QJsonParseError json_error;
+    QJsonDocument jdoc = QJsonDocument::fromJson(json, &json_error);
+    if(json_error.error != QJsonParseError::NoError)return;
+    QJsonObject rootObj = jdoc.object();
+    QJsonArray datas = rootObj.value("data").toArray();
+
+    stock->lock.lock();
+    for(int i=datas.count()-1;i>=0;--i)
+    {//最新数据在最前面
+        QJsonObject data = datas[i].toObject();
+        KData* k = new KData();
+        k->date = data.value("date").toVariant().toString();
+        k->open = data.value("open").toVariant().toFloat();
+        k->high = data.value("high").toVariant().toFloat();
+        k->low = data.value("low").toVariant().toFloat();
+        k->close = data.value("close").toVariant().toFloat();
+        k->volume = data.value("volume").toVariant().toDouble();
+        k->ma5 = data.value("ma5").toVariant().toDouble();
+        stock->history.insert(0, k);
+    }
+    stock->lock.unlock();
 }

@@ -7,6 +7,10 @@
 #include <QSqlRecord>
 #include <QList>
 #include <QThread>
+#include <QThreadPool>
+#include <QtDebug>
+#include <QDate>
+#include <QMutex>
 
 class KData
 {
@@ -31,14 +35,29 @@ public:
     float   out;
     int     marketTime;
     QList<KData*> history;
+    QMutex lock;
+};
+
+class PullTask : public QObject, public QRunnable
+{
+    Q_OBJECT
+public:
+    PullTask(Stock* sk){this->stock=sk;}
+    ~PullTask(){}
+protected:
+    Stock* stock;
+    void run();
 };
 
 class AraleStock : public QObject
 {
+    Q_OBJECT
+
 private:
     QSqlDatabase mDB;
     QList<Stock*> mStocks;
     QThread mThread;
+    QThreadPool mPool;
 public:
     AraleStock();
     const QList<Stock*>& getStocks(){return mStocks;}
@@ -52,7 +71,7 @@ public:
     QString createStockTable();
     QString createStockTable(QString code);
 public slots:
-    void onRefresh();
+    void onRefresh(){};
 };
 
 #endif // ARALESTOCK_H
