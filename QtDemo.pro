@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       += core gui network sql
+QT       += core gui network sql printsupport
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -16,6 +16,7 @@ TEMPLATE = app
 # depend on your compiler). Please consult the documentation of the
 # deprecated API in order to know how to port your code away from it.
 DEFINES += QT_DEPRECATED_WARNINGS
+#DEFINES += BOOST_ALL_DYN_LINK=1
 
 # You can also make your code fail to compile if you use deprecated APIs.
 # In order to do so, uncomment the following line.
@@ -25,27 +26,34 @@ DEFINES += QT_DEPRECATED_WARNINGS
 CONFIG += c++11
 
 SOURCES += \
-        main.cpp \
+    stock/stockdata.cpp \
+    stock/StockMgr.cpp \
+    main.cpp \
     MainWindow.cpp \
-    listitem.cpp \
-    subwindow.cpp \
-    stockdata.cpp \
-    AraleStock.cpp \
-    KMapWidget.cpp
+    KMapWidget.cpp \
+    TimeLineWidget.cpp \
+    qcustomplot.cpp
+
 
 HEADERS += \
+    qss\PushButtonStyle.h \
+    qss\ScrollBarStyle.h \
+    qss\TabWidgetStyle.h \
+    stock/stockdata.h \
+    stock/StockMgr.h \
+    utility/ObjArray.hpp \
+    utility/concurrentqueue.h \
+    utility/MsgQueue.hpp \
+    utility/TimerManager.hpp \
     MainWindow.h \
-    listitem.h \
     stdafx.h \
-    subwindow.h \
-    stockdata.h \
-    AraleStock.h \
-    KMapWidget.h
+    KMapWidget.h \
+    TimeLineWidget.h \
+    qcustomplot.h
+
 
 FORMS += \
-    MainWindow.ui \
-    listitem.ui \
-    subwindow.ui
+    MainWindow.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
@@ -59,6 +67,8 @@ DISTFILES += \
     tusharedemo.py
 
 LIBS += D:/Anaconda3/libs/python37.lib
-
 INCLUDEPATH += D:/Anaconda3/include
 DEPENDPATH += D:/Anaconda3/include
+
+#INCLUDEPATH += E:/cpp-proc/boost_1_70_0
+#LIBS += -LE:/cpp-proc/boost_1_70_0/stage/lib

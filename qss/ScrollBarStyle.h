@@ -1,0 +1,57 @@
+#ifndef SCROLLBARSTYLE_H
+#define SCROLLBARSTYLE_H
+//不能有注释在字符串内
+const char* ScrollBarStyle ="   \
+QScrollBar:vertical   \
+{   \
+    width:8px;   \
+    background:rgba(255,0,0,0%);   \
+    margin:0px,0px,0px,0px;   \
+    padding-top:9px; \
+    padding-bottom:9px;   \
+}   \
+QScrollBar::handle:vertical   \
+{   \
+    width:8px;   \
+    background:rgba(255,0,0,25%);   \
+    border-radius:4px;  \
+    min-height:20;   \
+}   \
+QScrollBar::handle:vertical:hover   \
+{   \
+    width:8px;   \
+    background:rgba(255,0,0,50%);   \
+    border-radius:4px;  \
+    min-height:20;   \
+}   \
+QScrollBar::add-line:vertical   \
+{   \
+    height:9px;width:8px;   \
+    background:rgba(255,0,0,50%);   \
+    subcontrol-position:bottom;   \
+}   \
+QScrollBar::sub-line:vertical   \
+{   \
+    height:9px;width:8px;   \
+    background:rgba(255,0,0,50%);   \
+    subcontrol-position:top;   \
+}   \
+QScrollBar::add-line:vertical:hover   \
+{   \
+    height:9px;width:8px;   \
+    background:rgba(255,0,0,50%);   \
+    subcontrol-position:bottom;   \
+}   \
+QScrollBar::sub-line:vertical:hover   \
+{   \
+    height:9px;width:8px;   \
+    background:rgba(255,0,0,50%);   \
+    subcontrol-position:top;   \
+}   \
+QScrollBar::add-page:vertical,QScrollBar::sub-page:vertical   \
+{   \
+    background:rgba(255,0,0,10%);   \
+    border-radius:4px;   \
+}   ";
+
+#endif // SCROLLBARSTYLE_H

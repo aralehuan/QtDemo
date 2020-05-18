@@ -1,9 +1,9 @@
-#ifndef MAINWINDOW_H
+﻿#ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
 #include <QMainWindow>
 #include <QListWidgetItem>
-#include "AraleStock.h"
+#include "stock/StockMgr.h"
 
 namespace Ui {
 class MainWindow;
@@ -24,16 +24,15 @@ private slots:
 
     void on_actionAdd_triggered();
 
-    void on_newWinButton_clicked();
-
-    void on_listWidget_currentRowChanged(int currentRow);
-
     void on_req_stock(QString code);
 
     void on_k_select(KData* k);
+
+    void on_stockTable_currentCellChanged(int currentRow, int currentColumn, int previousRow, int previousColumn);
+
+    void onStockChanged(Stock* s);
 private:
     Ui::MainWindow *ui;
-    AraleStock mStock;
     void init();
 };
 

@@ -1,4 +1,4 @@
-#include "stockdata.h"
+﻿#include "stock/stockdata.h"
 StockData::StockData(QObject *parent) : QObject(parent)
 {
 

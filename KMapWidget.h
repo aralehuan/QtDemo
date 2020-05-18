@@ -1,10 +1,10 @@
-#ifndef KMAPWIDGET_H
+﻿#ifndef KMAPWIDGET_H
 #define KMAPWIDGET_H
 
 #include <QWidget>
 #include <QPaintEvent>
 #include <QTimer>
-#include "AraleStock.h"
+#include "stock/StockMgr.h"
 
 class KMapWidget : public QWidget
 {

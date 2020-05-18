@@ -1,55 +1,63 @@
 ﻿#pragma execution_character_set("utf-8")
 #include <QtDebug>
 #include <QDate>
+#include <QScrollArea>
 #include "MainWindow.h"
 #include "ui_mainwindow.h"
-#include "listitem.h"
-#include "subwindow.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    //设置风格
+    //QString mainStyle("border:1px solid #FF0000;background:rgba(0, 0, 0,100%);color:white;");
+    //setStyleSheet("border:1px solid #FF0000;background:rgba(0, 0, 0,100%);color:white;");
+    //信号槽
     connect(ui->kmap, SIGNAL(selectK(KData*)), this, SLOT(on_k_select(KData*)) );
-
-    QString err = mStock.init();
+    connect(StockMgr::single(), SIGNAL(sendStockChanged(Stock*)), this, SLOT(onStockChanged(Stock*)), Qt::ConnectionType::QueuedConnection);
+    //数据初始化
+    StockMgr* sm = StockMgr::single();
+    QString err = sm->init();
     if(err!=nullptr)
     {
         QMessageBox::critical(nullptr, "错误", err, QMessageBox::Cancel);
     }
-
-    mStock.loadStocks();
-    const QList<Stock*>& ls = mStock.getStocks();
-    for(int i=0;i<100;/*ls.count();*/++i)
+    //显示股票列表
+    const QList<Stock*>& ls = sm->getStocks();
+    ui->stockTable-> setEditTriggers(QAbstractItemView::NoEditTriggers);//不可编辑
+    ui->stockTable->setSelectionMode(QAbstractItemView::SingleSelection);//单选
+    ui->stockTable->setSelectionBehavior(QAbstractItemView::SelectRows);//单击格也选中一行
+    ui->stockTable->setAlternatingRowColors(true);
+    ui->stockTable->setRowCount(ls.count());
+    for(int i=0;i<ls.count();++i)
     {
-        QListWidgetItem* item = new QListWidgetItem();
-        item->setSizeHint(QSize(0,50));
-        ui->listWidget->addItem(item);
-        ListItem* li = new ListItem();
-        li->init(i+1, ls[i]);
-        li->li = item;
-        ui->listWidget->setItemWidget(item,li);
-        connect(li, SIGNAL(reqStock(QString)), this, SLOT(on_req_stock(QString)) );
+        Stock*  sk = ls[i];
+        ui->stockTable->setItem(i,0,new QTableWidgetItem(sk->code));
+        ui->stockTable->setItem(i,1,new QTableWidgetItem(sk->name));
+        ui->stockTable->setItem(i,2,new QTableWidgetItem(sk->industry));
+        ui->stockTable->setItem(i,3,new QTableWidgetItem(sk->area));
+        ui->stockTable->setItem(i,4,new QTableWidgetItem(QString::number(sk->marketTime, 10)));
     }
 }
 
 MainWindow::~MainWindow()
 {
-    mStock.deinit();
+    StockMgr::single()->deinit();
     delete ui;
 }
 
 void MainWindow::on_req_stock(QString code)
 {
-    mStock.reqStock(code);
+    qDebug()<<code;
+   //StockMgr::single()->reqStock(code);
 }
 
 void MainWindow::on_k_select(KData* k)
 {
     if(k!=nullptr)
     {
-        QDate date = QDate::fromString(k->date,"yyyy-MM-dd");
+        QDate date = QDate::fromString(k->strDate(),"yyyy-MM-dd");
         QString ds = date.toString("yy/MM/dd/dddd").remove(9,2);
         ui->lbDate->setText(ds);
         ui->lbOpen->setText(QString::asprintf("开 %0.2f",k->open));
@@ -75,42 +83,41 @@ void MainWindow::on_k_select(KData* k)
 
 void MainWindow::on_pushButton_clicked()
 {
-    ui->statusBar->showMessage("你点击了pushButton");
+    /*ui->statusBar->showMessage("你点击了pushButton");
     QListWidgetItem* item = new QListWidgetItem();
     item->setSizeHint(QSize(0,50));
     ui->listWidget->addItem(item);
     ListItem* li = new ListItem();
     li->li = item;
-    ui->listWidget->setItemWidget(item,li);
+    ui->listWidget->setItemWidget(item,li);*/
 }
 
 void MainWindow::on_radioButton_toggled(bool checked)
 {
-    QString s = checked?"true":"false";
-    ui->statusBar->showMessage("你点击了radioButton:"+s);
+   // QString s = checked?"true":"false";
+    //ui->statusBar->showMessage("你点击了radioButton:"+s);
 }
 
 void MainWindow::on_actionAdd_triggered()
 {
-    ui->statusBar->showMessage("你点击了工具栏actionAdd");
-}
-
-void MainWindow::on_newWinButton_clicked()
-{
    // SubWindow* sw = new SubWindow();
-   // sw->setWindowFlags(Qt::SubWindow|Qt::FramelessWindowHint);//无边框子窗口
+    //sw->setWindowFlags(Qt::SubWindow|Qt::FramelessWindowHint);//无边框子窗口
     //sw->setParent(this);//嵌入式子窗口
     //sw->show();
-
-    mStock.reqStock("688018");
+   // ui->statusBar->showMessage("你点击了工具栏actionAdd");
 }
 
-void MainWindow::on_listWidget_currentRowChanged(int currentRow)
+void MainWindow::on_stockTable_currentCellChanged(int currentRow, int currentColumn, int previousRow, int previousColumn)
 {
-    const QList<Stock*>& ls = mStock.getStocks();
+    const QList<Stock*>& ls = StockMgr::single()->getStocks();
     Stock* s = ls[currentRow];
     ui->kmap->setStock(s);
     ui->statusBar->showMessage(s->name);
+}
+
+void MainWindow::onStockChanged(Stock* s)
+{
+    ui->kmap->update();
 }
 
 void MainWindow::init()

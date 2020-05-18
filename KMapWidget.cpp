@@ -1,4 +1,4 @@
-#pragma warning(disable:4819)
+﻿#pragma warning(disable:4819)
 #include "KMapWidget.h"
 #include <QPainter>
 #include <QDebug>
@@ -27,7 +27,7 @@ void KMapWidget::setStock(Stock* stock)
 }
 
 bool KMapWidget::event(QEvent *event)
-{ 
+{
     QEvent::Type et = event->type();
     switch (et)
     {
@@ -50,11 +50,13 @@ void KMapWidget::paintEvent(QPaintEvent * event)
 {
     QPainter painter(this);
     drawBack(painter);
-    if(mStock==nullptr || mStock->history.isEmpty())return;
+    if(mStock==nullptr)return;
+    const QList<KData*>& history = mStock->getHistory();
+    if(history.isEmpty())return;
     painter.setBrush(Qt::SolidPattern);
     //从右往左绘制k节点，mStock最前面的为最新记录
     int days = mW / mKW;//最多显示多少天
-    int count = mStock->history.length();
+    int count = history.length();
     int rightK=  mScrollX/mKW;
     int leftK  =  rightK + days;
     if(leftK>count)leftK=count;
@@ -65,7 +67,7 @@ void KMapWidget::paintEvent(QPaintEvent * event)
     mHighVol = 0;
     for(int i=rightK;i<leftK;++i)
     {
-        KData* k = mStock->history[i];
+        KData* k = history[i];
         if(mHigh<k->high)mHigh=k->high;
         if(mLow>k->low)mLow=k->low;
         if(mHighVol<k->volume)mHighVol=k->volume;
@@ -91,9 +93,10 @@ void KMapWidget::paintEvent(QPaintEvent * event)
      float halfKW = mKW/2;
      float pixel = 1.0f*mH/(mHigh-mLow);
      QVector<QLineF> lines;
+     const QList<KData*>& history = mStock->getHistory();
      for(int i=rightK;i<leftK;++i)
      {
-        KData* k = mStock->history[i];
+        KData* k = history[i];
         float up = k->open>k->close?k->open:k->close;
         if(k->close>k->open)
         {
@@ -114,7 +117,7 @@ void KMapWidget::paintEvent(QPaintEvent * event)
         painter.drawLine(x+halfKW,(mHigh - k->high)*pixel, x+halfKW, (mHigh - k->low)*pixel);
         painter.drawRect(x+1,(mHigh - up)*pixel, mKW-2, abs(k->close-k->open)*pixel);
         //计算5日均线坐标
-        float nextma = i+1<mStock->history.count()? mStock->history[i+1]->ma5:k->ma5;
+        float nextma = i+1<history.count()? history[i+1]->ma5:k->ma5;
         if(nextma==0)nextma = k->ma5;
         lines.append(QLineF(x+halfKW, (mHigh - k->ma5)*pixel, x-halfKW,   (mHigh -nextma)*pixel));
         x-=mKW;
@@ -161,7 +164,7 @@ void KMapWidget::drawMark(QPainter& painter, int rightK, int leftK)
     painter.drawText(0,priceY+fontHight, QString::number(price,'f',2));
 
     int idx = leftK-mMarkX/mKW-1;
-    KData* k = idx<0?nullptr:mStock->history[idx];
+    KData* k = idx<0?nullptr:mStock->getHistory()[idx];
     emit selectK(k);
 }
 
@@ -177,9 +180,10 @@ void KMapWidget::drawVolume(QPainter& painter, int rightK, int leftK)
     float halfKW = mKW/2;
     float pixel = 1.0f*mH2/mHighVol;
     QVector<QLineF> lines;
+    const QList<KData*>& history = mStock->getHistory();
     for(int i=rightK;i<leftK;++i)
     {
-       KData* k = mStock->history[i];
+       KData* k = history[i];
        float up = k->open>k->close?k->open:k->close;
        if(k->close>k->open)
        {
@@ -255,8 +259,12 @@ void KMapWidget::mouseMoveEvent(QMouseEvent *e)
 void KMapWidget::adjustScroll()
 {
     if(mStock==nullptr)return;
-    int count = mStock->history.length();
+    int count =  mStock->getHistory().length();
     float contentSize = count*mKW;
-    if(mScrollX>(contentSize - mW+mKW))mScrollX=contentSize - mW+mKW;
+    if(mScrollX>(contentSize - mW+mKW))
+    {
+        qDebug()<<"pull";
+        mScrollX=contentSize - mW+mKW;
+    }
     if(mScrollX<0)mScrollX=0;
 }
