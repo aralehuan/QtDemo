@@ -5,4 +5,8 @@
         <file>Res/360EntAdmin_32.png</file>
         <file>Res/360SoftManger_10_32.png</file>
     </qresource>
+    <qresource prefix="/gif">
+        <file>Res/loading.gif</file>
+        <file>Res/loading2.gif</file>
+    </qresource>
 </RCC>

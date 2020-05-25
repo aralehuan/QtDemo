@@ -32,7 +32,8 @@ SOURCES += \
     MainWindow.cpp \
     KMapWidget.cpp \
     TimeLineWidget.cpp \
-    qcustomplot.cpp
+    qcustomplot.cpp \
+    LoadingDlg.cpp
 
 
 HEADERS += \
@@ -49,11 +50,13 @@ HEADERS += \
     stdafx.h \
     KMapWidget.h \
     TimeLineWidget.h \
-    qcustomplot.h
+    qcustomplot.h \
+    LoadingDlg.h
 
 
 FORMS += \
-    MainWindow.ui
+    MainWindow.ui \
+    LoadingDlg.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

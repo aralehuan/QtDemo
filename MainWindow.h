@@ -18,22 +18,20 @@ public:
     ~MainWindow();
 
 private slots:
-    void on_pushButton_clicked();
-
-    void on_radioButton_toggled(bool checked);
-
-    void on_actionAdd_triggered();
-
-    void on_req_stock(QString code);
+    void on_toolSync_triggered();
+    void on_toolAnalyse_triggered();
 
     void on_k_select(KData* k);
-
     void on_stockTable_currentCellChanged(int currentRow, int currentColumn, int previousRow, int previousColumn);
 
-    void onStockChanged(Stock* s);
+    void onTaskFinished(StockTask* task);
+    void onSyncProgress(float progress);
+    void onMessage(int type, QString msg);
+
 private:
     Ui::MainWindow *ui;
     void init();
+    bool event(QEvent *event);
 };
 
 #endif // MAINWINDOW_H

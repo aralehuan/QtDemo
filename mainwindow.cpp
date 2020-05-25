@@ -4,10 +4,9 @@
 #include <QScrollArea>
 #include "MainWindow.h"
 #include "ui_mainwindow.h"
+#include "LoadingDlg.h"
 
-MainWindow::MainWindow(QWidget *parent) :
-    QMainWindow(parent),
-    ui(new Ui::MainWindow)
+MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
     //设置风格
@@ -15,7 +14,9 @@ MainWindow::MainWindow(QWidget *parent) :
     //setStyleSheet("border:1px solid #FF0000;background:rgba(0, 0, 0,100%);color:white;");
     //信号槽
     connect(ui->kmap, SIGNAL(selectK(KData*)), this, SLOT(on_k_select(KData*)) );
-    connect(StockMgr::single(), SIGNAL(sendStockChanged(Stock*)), this, SLOT(onStockChanged(Stock*)), Qt::ConnectionType::QueuedConnection);
+    connect(StockMgr::single(), SIGNAL(sendTaskFinished(StockTask*)), this, SLOT(onTaskFinished(StockTask*)), Qt::ConnectionType::QueuedConnection);
+    connect(StockMgr::single(), SIGNAL(sendSyncProgress(float)), this, SLOT(onSyncProgress(float)), Qt::ConnectionType::QueuedConnection);
+    connect(StockMgr::single(), SIGNAL(sendMessage(int, QString)), this, SLOT(onMessage(int, QString)), Qt::ConnectionType::QueuedConnection);
     //数据初始化
     StockMgr* sm = StockMgr::single();
     QString err = sm->init();
@@ -47,17 +48,11 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::on_req_stock(QString code)
-{
-    qDebug()<<code;
-   //StockMgr::single()->reqStock(code);
-}
-
 void MainWindow::on_k_select(KData* k)
 {
     if(k!=nullptr)
     {
-        QDate date = QDate::fromString(k->strDate(),"yyyy-MM-dd");
+        QDate date = QDate::fromString(StockMgr::int2StrTime(k->date),"yyyy-MM-dd");
         QString ds = date.toString("yy/MM/dd/dddd").remove(9,2);
         ui->lbDate->setText(ds);
         ui->lbOpen->setText(QString::asprintf("开 %0.2f",k->open));
@@ -81,30 +76,14 @@ void MainWindow::on_k_select(KData* k)
     }
 }
 
-void MainWindow::on_pushButton_clicked()
+void MainWindow::on_toolSync_triggered()
 {
-    /*ui->statusBar->showMessage("你点击了pushButton");
-    QListWidgetItem* item = new QListWidgetItem();
-    item->setSizeHint(QSize(0,50));
-    ui->listWidget->addItem(item);
-    ListItem* li = new ListItem();
-    li->li = item;
-    ui->listWidget->setItemWidget(item,li);*/
+    LoadingDlg::showLoading(this);
+    StockMgr::single()->syncData();
 }
 
-void MainWindow::on_radioButton_toggled(bool checked)
+void MainWindow::on_toolAnalyse_triggered()
 {
-   // QString s = checked?"true":"false";
-    //ui->statusBar->showMessage("你点击了radioButton:"+s);
-}
-
-void MainWindow::on_actionAdd_triggered()
-{
-   // SubWindow* sw = new SubWindow();
-    //sw->setWindowFlags(Qt::SubWindow|Qt::FramelessWindowHint);//无边框子窗口
-    //sw->setParent(this);//嵌入式子窗口
-    //sw->show();
-   // ui->statusBar->showMessage("你点击了工具栏actionAdd");
 }
 
 void MainWindow::on_stockTable_currentCellChanged(int currentRow, int currentColumn, int previousRow, int previousColumn)
@@ -115,11 +94,49 @@ void MainWindow::on_stockTable_currentCellChanged(int currentRow, int currentCol
     ui->statusBar->showMessage(s->name);
 }
 
-void MainWindow::onStockChanged(Stock* s)
+void MainWindow::onTaskFinished(StockTask* task)
 {
+    if(!ui->kmap->isShowing(task->mStock))return;
     ui->kmap->update();
 }
+
+void MainWindow::onSyncProgress(float progress)
+{
+    if(progress>=1)LoadingDlg::hideLoading();
+    ui->progressBar->setValue(progress*100);
+}
+
+void MainWindow::onMessage(int type, QString msg)
+{
+    if(type==MsgType::TaskCount)
+    {
+        ui->statusBar->showMessage(QString().sprintf("后台任务数:%d", StockMgr::single()->getTaskCount()));
+    }
+    else
+    {
+        ui->statusBar->showMessage(msg);
+   }
+}
+
 
 void MainWindow::init()
 {
 }
+
+ bool MainWindow::event(QEvent *event)
+ {
+     QEvent::Type et = event->type();
+     switch (et)
+     {
+        case QEvent::Resize:
+        case QEvent::Move:
+         {
+             QPoint pt = this->pos();
+             QSize sz = this->size();
+             LoadingDlg::setPosition(pt+QPoint(0.5*sz.width(), 0.5*sz.height()));
+             return true;
+         }
+     default:
+         return QWidget::event(event);
+     }
+ }

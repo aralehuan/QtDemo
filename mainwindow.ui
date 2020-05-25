@@ -14,8 +14,74 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralWidget">
-   <layout class="QGridLayout" name="gridLayout_3">
-    <item row="1" column="0">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <widget class="QLabel" name="lbDate">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>24</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>20/01/01/三</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbOpen">
+        <property name="text">
+         <string>开</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbClose">
+        <property name="text">
+         <string>收</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbHigh">
+        <property name="text">
+         <string>高</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbLow">
+        <property name="text">
+         <string>低</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbVolume">
+        <property name="text">
+         <string>量</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbAmount">
+        <property name="text">
+         <string>额</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbChg">
+        <property name="text">
+         <string>涨 </string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item>
      <layout class="QGridLayout" name="gridLayout_2">
       <property name="sizeConstraint">
        <enum>QLayout::SetDefaultConstraint</enum>
@@ -93,73 +159,7 @@
       </item>
      </layout>
     </item>
-    <item row="0" column="0">
-     <layout class="QHBoxLayout" name="horizontalLayout">
-      <item>
-       <widget class="QLabel" name="lbDate">
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>24</height>
-         </size>
-        </property>
-        <property name="text">
-         <string>20/01/01/三</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="lbOpen">
-        <property name="text">
-         <string>开</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="lbClose">
-        <property name="text">
-         <string>收</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="lbHigh">
-        <property name="text">
-         <string>高</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="lbLow">
-        <property name="text">
-         <string>低</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="lbVolume">
-        <property name="text">
-         <string>量</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="lbAmount">
-        <property name="text">
-         <string>额</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="lbChg">
-        <property name="text">
-         <string>涨 </string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </item>
-    <item row="2" column="0">
+    <item>
      <widget class="QTableWidget" name="stockTable">
       <column>
        <property name="text">
@@ -183,6 +183,11 @@
       </column>
       <column>
        <property name="text">
+        <string>上市</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
         <string>现价</string>
        </property>
       </column>
@@ -193,31 +198,23 @@
       </column>
      </widget>
     </item>
+    <item>
+     <widget class="QProgressBar" name="progressBar">
+      <property name="maximumSize">
+       <size>
+        <width>16777215</width>
+        <height>1</height>
+       </size>
+      </property>
+      <property name="value">
+       <number>50</number>
+      </property>
+      <property name="textVisible">
+       <bool>false</bool>
+      </property>
+     </widget>
+    </item>
    </layout>
-  </widget>
-  <widget class="QMenuBar" name="menuBar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>651</width>
-     <height>23</height>
-    </rect>
-   </property>
-   <widget class="QMenu" name="menu_A">
-    <property name="title">
-     <string>菜单A</string>
-    </property>
-    <addaction name="actionmenu1"/>
-    <addaction name="actionmenu2"/>
-   </widget>
-   <widget class="QMenu" name="menu_B">
-    <property name="title">
-     <string>菜单B</string>
-    </property>
-   </widget>
-   <addaction name="menu_A"/>
-   <addaction name="menu_B"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
   <widget class="QToolBar" name="toolBar">
@@ -236,23 +233,10 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="actionAdd"/>
-   <addaction name="actionAdd2"/>
+   <addaction name="toolSync"/>
+   <addaction name="toolAnalyse"/>
   </widget>
-  <action name="actionmenu1">
-   <property name="text">
-    <string>刷新</string>
-   </property>
-   <property name="toolTip">
-    <string>Refresh</string>
-   </property>
-  </action>
-  <action name="actionmenu2">
-   <property name="text">
-    <string>menu2</string>
-   </property>
-  </action>
-  <action name="actionAdd">
+  <action name="toolSync">
    <property name="icon">
     <iconset resource="qtdemo.qrc">
      <normaloff>:/toolbar/Res/360AntiVirus_32.png</normaloff>
@@ -261,8 +245,11 @@
    <property name="text">
     <string>Add</string>
    </property>
+   <property name="toolTip">
+    <string>同步历史数据</string>
+   </property>
   </action>
-  <action name="actionAdd2">
+  <action name="toolAnalyse">
    <property name="icon">
     <iconset resource="qtdemo.qrc">
      <normaloff>:/toolbar/Res/360EntAdmin_32.png</normaloff>
@@ -270,6 +257,9 @@
    </property>
    <property name="text">
     <string>Add2</string>
+   </property>
+   <property name="toolTip">
+    <string>分析</string>
    </property>
   </action>
  </widget>

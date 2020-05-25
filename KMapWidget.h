@@ -33,6 +33,7 @@ private:
 public:
     explicit KMapWidget(QWidget *parent = 0);
     void setStock(Stock* stock);
+    bool isShowing(Stock* stock){return mStock==stock;}
 
 protected:
     void paintEvent(QPaintEvent * event);
