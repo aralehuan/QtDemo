@@ -33,7 +33,9 @@ SOURCES += \
     KMapWidget.cpp \
     TimeLineWidget.cpp \
     qcustomplot.cpp \
-    LoadingDlg.cpp
+    LoadingDlg.cpp \
+    stock/Stock.cpp \
+    stock/StockTask.cpp
 
 
 HEADERS += \
@@ -51,7 +53,9 @@ HEADERS += \
     KMapWidget.h \
     TimeLineWidget.h \
     qcustomplot.h \
-    LoadingDlg.h
+    LoadingDlg.h \
+    stock/Stock.h \
+    stock/StockTask.h
 
 
 FORMS += \

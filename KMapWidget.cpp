@@ -113,9 +113,12 @@ void KMapWidget::paintEvent(QPaintEvent * event)
             painter.setBrush(Qt::black);
             painter.setPen(Qt::black);
         }
-
+        //k节点
         painter.drawLine(x+halfKW,(mHigh - k->high)*pixel, x+halfKW, (mHigh - k->low)*pixel);
         painter.drawRect(x+1,(mHigh - up)*pixel, mKW-2, abs(k->close-k->open)*pixel);
+        //当日均价线
+        painter.setPen(Qt::black);
+        painter.drawLine(x+halfKW-1,(mHigh - k->avg)*pixel, x+halfKW+1, (mHigh -k->avg)*pixel);
         //计算5日均线坐标
         float nextma = i+1<history.count()? history[i+1]->ma5:k->ma5;
         if(nextma==0)nextma = k->ma5;
@@ -263,7 +266,7 @@ void KMapWidget::adjustScroll()
     float contentSize = count*mKW;
     if(mScrollX>(contentSize - mW+mKW))
     {
-        qDebug()<<"pull";
+        //qDebug()<<"pull";拉取更老数据
         mScrollX=contentSize - mW+mKW;
     }
     if(mScrollX<0)mScrollX=0;

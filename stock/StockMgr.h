@@ -13,123 +13,54 @@
 #include <QMutex>
 #include <QMap>
 #include <QWaitCondition>
-
+#include <sstream>
+#include "stock/Stock.h"
+#include "stock/StockTask.h"
+using namespace  std;
 enum TaskFlag
 {
     InitSync,
     SyncData,
     SaveDB,
+    Analyse,
+    Check,
 };
 
 enum MsgType
 {
-    Info,
-    Error,
-    TaskCount,
+    Info,   //信息日志
+    Error, //错误日志
+    MessageBox, //提示框
+    TaskCount,//后台任务数
 };
 
-class KData
+class ThreadDB
 {
+    //同个连接不能跨线程使用，所以使用线程局部存储，每个线程保持一个连接
+    QSqlDatabase mDB;
 public:
-    bool dirty;
-    int    date;//yyyyMMdd
-    float high;
-    float low;
-    float open;
-    float close;
-    double volume;
-    float ma5;
-
-    KData():dirty(false){}
-};
-
-class StockMgr;
-class Stock
-{
-public:
-    bool  dirty;
-    bool  created;//历史数据表已建
-    bool  loaded;//历史数据已加载
-    QString code;
-    QString name;
-    QString area;
-    QString industry;
-    double  total;
-    double  out;
-    int     marketTime;//yyyyMMdd
-    int     minDate;//日k开始时间
-    int     maxDate;//日k结束时间
-
-private:
-    QList<KData*> history;
-    void createTable(QSqlDatabase& db);
-    void reqHistory();
-
-public:
-    Stock& operator=(const Stock& tmp)
+    ThreadDB()
     {
-        if(this->code != tmp.code){this->code=tmp.code;dirty=true;}
-        if(this->name != tmp.name){this->name=tmp.name;dirty=true;}
-        if(this->area != tmp.area){this->area=tmp.area;dirty=true;}
-        if(this->industry != tmp.industry){this->industry=tmp.industry;dirty=true;}
-        if(this->total != tmp.total){this->total=tmp.total;dirty=true;}
-        if(this->out != tmp.out){this->out=tmp.out;dirty=true;}
-        return *this;
-    }
-    Stock(QString scode):dirty(false),created(false),loaded(false),code(scode),minDate(88880808),maxDate(0){}
-    const QList<KData*>& getHistory();
-    void mergeHistory(const QList<KData*>& ls);
-
-    friend class  StockMgr;
-};
-
-class StockTask : public QRunnable
-{
-public:
-    Stock*  mStock;
-    int   mTaskFlag;
-
-    StockTask(Stock* s,int flag):mStock(s),mTaskFlag(flag)
-    {
-        setAutoDelete(false);//不设置，线程会自动释放掉该runable
+        ostringstream oss;
+        oss<<std::this_thread::get_id();
+        unsigned long long tid = std::stoull(oss.str());
+        mDB = QSqlDatabase::addDatabase("QSQLITE", QString().sprintf("db%d",tid));//连接不能同名
+        mDB.setDatabaseName("StockDB.db");
+        mDB.open();
     }
 
-    virtual ~StockTask(){}
-    virtual void onFinished(){};
+    ~ThreadDB()
+    {
+        mDB.close();
+    }
+
+    QSqlDatabase& getDB()
+    {
+        return mDB;
+    }
 };
 
-class PullHistoryTask : public StockTask
-{
-protected:
-    QList<KData*> cach;
-    int mBeginTime;
-    int mEndTime;
-public:
-    PullHistoryTask(Stock* s, int flag, int beginTime, int endTime):StockTask(s,flag),mBeginTime(beginTime),mEndTime(endTime){}
-    void run();
-    void onFinished();
-};
-
-class PullStocksTask : public StockTask
-{
-protected:
-    QList<Stock> cach;
-public:
-    PullStocksTask(int flag):StockTask(nullptr,flag){}
-    void run();
-    void onFinished();
-};
-
-class SaveDBTask : public StockTask
-{
-protected:
-    QList<Stock> cach;
-public:
-    SaveDBTask(int flag):StockTask(nullptr,flag){}
-    void run();
-    void onFinished(){};
-};
-
+extern thread_local ThreadDB threadDB;
 class StockMgr : public QObject
 {
     Q_OBJECT
@@ -147,7 +78,6 @@ public:
     }
 private:
     StockMgr();
-    QSqlDatabase mDB;
     QList<Stock*> mStocks;
     QMap<QString,Stock*> mStockMap;
     QThread* mThread;
@@ -155,7 +85,8 @@ private:
     QMutex mMutex;
     QWaitCondition mSyncCompleted;
     int mTaskCount;//后台任务数
-    bool mSaving;
+    int mMinDate;
+    int mMaxDate;
 
    //创建股票信息表
    QString createTable(QSqlDatabase& db);
@@ -182,14 +113,20 @@ public:
     void deinit();
     //后台任务
     void startTask(QRunnable* task){++mTaskCount;mPool.start(task); emit sendMessage(TaskCount,nullptr);}
-    void notifyTaskFinished(StockTask* task){emit sendTaskFinished(task);}
+    void notifyTaskFinished(StockTask* task){emit sendTaskFinished(QSharedPointer<StockTask>(task));}//使用共享指针保证每个槽函数调用完后再释放task
+    void notifyMessage(int type, QString msg){emit sendMessage(type,msg);}
     int getTaskCount(){return mTaskCount;}
     //获取股票数据
     Stock* getStock(QString code,bool create=true);
     const QList<Stock*>& getStocks(){return mStocks;}
     //同步股票数据
-    void syncData();
+    void syncData(Stock* stock=nullptr);
     void saveData();
+    void checkData(Stock* stock=nullptr);
+    //分析股票数据
+    void analyseData(Stock* stock=nullptr);
+    //是否有任务未处理完
+    bool isBusy(){return mTaskCount>0||mPool.activeThreadCount()>0;}
     //判断表是否存在
     static bool exist(QSqlDatabase& db, QString table, QString where=nullptr);
     //日期转换
@@ -197,10 +134,10 @@ public:
     static int str2IntTime(QString time){return time.remove('-').toInt();}
 
 public slots:
-    void onTaskFinished(StockTask* task);
+    void onTaskFinished(QSharedPointer<StockTask> task);
 
 signals:
-    void sendTaskFinished(StockTask* task);
+    void sendTaskFinished(QSharedPointer<StockTask> task);
     void sendSyncProgress(float progress);
     void sendMessage(int type, QString msg);
 };

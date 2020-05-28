@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>651</width>
-    <height>643</height>
+    <width>729</width>
+    <height>673</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -55,6 +55,13 @@
        <widget class="QLabel" name="lbLow">
         <property name="text">
          <string>低</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbAVG">
+        <property name="text">
+         <string>均 </string>
         </property>
        </widget>
       </item>
@@ -196,6 +203,21 @@
         <string>涨幅</string>
        </property>
       </column>
+      <column>
+       <property name="text">
+        <string>年涨跌比</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>月涨跌比</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>黑名单</string>
+       </property>
+      </column>
      </widget>
     </item>
     <item>
@@ -218,14 +240,23 @@
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
   <widget class="QToolBar" name="toolBar">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
    <property name="windowTitle">
     <string>toolBar</string>
    </property>
    <property name="movable">
     <bool>false</bool>
    </property>
+   <property name="allowedAreas">
+    <set>Qt::LeftToolBarArea|Qt::RightToolBarArea|Qt::TopToolBarArea</set>
+   </property>
    <property name="floatable">
-    <bool>true</bool>
+    <bool>false</bool>
    </property>
    <attribute name="toolBarArea">
     <enum>TopToolBarArea</enum>
@@ -234,13 +265,20 @@
     <bool>false</bool>
    </attribute>
    <addaction name="toolSync"/>
+   <addaction name="toolSave"/>
    <addaction name="toolAnalyse"/>
+   <addaction name="toolBlacklist"/>
+   <addaction name="tookCheck"/>
+   <addaction name="space"/>
+   <addaction name="separator"/>
+   <addaction name="toolSafeSync"/>
+   <addaction name="separator"/>
   </widget>
   <action name="toolSync">
    <property name="icon">
     <iconset resource="qtdemo.qrc">
-     <normaloff>:/toolbar/Res/360AntiVirus_32.png</normaloff>
-     <normalon>:/toolbar/D:/BaiduNetdiskDownload/QT/Qt360-10.0/resource/advtools/360AntiVirus_32.png</normalon>:/toolbar/Res/360AntiVirus_32.png</iconset>
+     <normaloff>:/toolbar/Res/sync.jpg</normaloff>
+     <normalon>:/toolbar/D:/BaiduNetdiskDownload/QT/Qt360-10.0/resource/advtools/360AntiVirus_32.png</normalon>:/toolbar/Res/sync.jpg</iconset>
    </property>
    <property name="text">
     <string>Add</string>
@@ -252,14 +290,113 @@
   <action name="toolAnalyse">
    <property name="icon">
     <iconset resource="qtdemo.qrc">
-     <normaloff>:/toolbar/Res/360EntAdmin_32.png</normaloff>
-     <normalon>:/toolbar/D:/BaiduNetdiskDownload/QT/Qt360-10.0/resource/advtools/360ask_32.png</normalon>:/toolbar/Res/360EntAdmin_32.png</iconset>
+     <normaloff>:/toolbar/Res/analyse.jpg</normaloff>
+     <normalon>:/toolbar/D:/BaiduNetdiskDownload/QT/Qt360-10.0/resource/advtools/360ask_32.png</normalon>:/toolbar/Res/analyse.jpg</iconset>
    </property>
    <property name="text">
     <string>Add2</string>
    </property>
    <property name="toolTip">
     <string>分析</string>
+   </property>
+  </action>
+  <action name="toolSave">
+   <property name="icon">
+    <iconset resource="qtdemo.qrc">
+     <normaloff>:/toolbar/Res/save.jpg</normaloff>:/toolbar/Res/save.jpg</iconset>
+   </property>
+   <property name="text">
+    <string>Add3</string>
+   </property>
+   <property name="toolTip">
+    <string>保存</string>
+   </property>
+  </action>
+  <action name="menuSync">
+   <property name="text">
+    <string>同步</string>
+   </property>
+   <property name="toolTip">
+    <string>同步</string>
+   </property>
+  </action>
+  <action name="menuSave">
+   <property name="text">
+    <string>保存</string>
+   </property>
+   <property name="toolTip">
+    <string>保存</string>
+   </property>
+  </action>
+  <action name="menuAnalyse">
+   <property name="text">
+    <string>分析</string>
+   </property>
+   <property name="toolTip">
+    <string>分析</string>
+   </property>
+  </action>
+  <action name="menuBlacklist">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>黑名单</string>
+   </property>
+   <property name="toolTip">
+    <string>黑名单</string>
+   </property>
+  </action>
+  <action name="menuReset">
+   <property name="text">
+    <string>重置</string>
+   </property>
+   <property name="toolTip">
+    <string>删除数据</string>
+   </property>
+  </action>
+  <action name="toolBlacklist">
+   <property name="icon">
+    <iconset>
+     <normaloff>Res/blacklist.jpg</normaloff>Res/blacklist.jpg</iconset>
+   </property>
+   <property name="text">
+    <string>Blacklist</string>
+   </property>
+   <property name="toolTip">
+    <string>设置ST股黑名单</string>
+   </property>
+  </action>
+  <action name="toolSafeSync">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="qtdemo.qrc">
+     <normaloff>:/toolbar/Res/spyder.png</normaloff>:/toolbar/Res/spyder.png</iconset>
+   </property>
+   <property name="text">
+    <string>慢同步</string>
+   </property>
+   <property name="toolTip">
+    <string>慢速同步(防止被封)</string>
+   </property>
+  </action>
+  <action name="space">
+   <property name="text">
+    <string/>
+   </property>
+  </action>
+  <action name="tookCheck">
+   <property name="icon">
+    <iconset resource="qtdemo.qrc">
+     <normaloff>:/toolbar/Res/check.jpg</normaloff>:/toolbar/Res/check.jpg</iconset>
+   </property>
+   <property name="text">
+    <string>校验</string>
+   </property>
+   <property name="toolTip">
+    <string>数据校验</string>
    </property>
   </action>
  </widget>
