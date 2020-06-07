@@ -19,7 +19,9 @@
 using namespace  std;
 enum TaskFlag
 {
-    InitSync,
+    InitList=1,
+    InitMinDate,
+    InitMaxDate,
     SyncData,
     SaveDB,
     Analyse,
@@ -32,6 +34,16 @@ enum MsgType
     Error, //错误日志
     MessageBox, //提示框
     TaskCount,//后台任务数
+};
+
+enum Result
+{
+    Ok,
+    Busy,
+    Saving,
+    DateError,
+    NotInTime,
+    NoTaskAdd,
 };
 
 class ThreadDB
@@ -87,13 +99,12 @@ private:
     int mTaskCount;//后台任务数
     int mMinDate;
     int mMaxDate;
+    bool mSaving;
 
    //创建股票信息表
    QString createTable(QSqlDatabase& db);
    //加载股票列表
    void loadStocks(QSqlDatabase& db);
-   //获取kdata有效时间(避免每次都请求所有股票)
-   void getValideDate(int& minDate, int& maxDate);
    //=============
    void threadWait()
    {
@@ -113,18 +124,22 @@ public:
     void deinit();
     //后台任务
     void startTask(QRunnable* task){++mTaskCount;mPool.start(task); emit sendMessage(TaskCount,nullptr);}
+    void notifyTaskStart(StockTask* task){emit sendTaskStart(task);}
     void notifyTaskFinished(StockTask* task){emit sendTaskFinished(QSharedPointer<StockTask>(task));}//使用共享指针保证每个槽函数调用完后再释放task
     void notifyMessage(int type, QString msg){emit sendMessage(type,msg);}
     int getTaskCount(){return mTaskCount;}
     //获取股票数据
     Stock* getStock(QString code,bool create=true);
+    Stock* getRefStock(){return getStock("000001",false);}
     const QList<Stock*>& getStocks(){return mStocks;}
     //同步股票数据
-    void syncData(Stock* stock=nullptr);
-    void saveData();
-    void checkData(Stock* stock=nullptr);
+    Result syncData(Stock* stock);
+    Result saveData();
+    Result checkData(Stock* stock);
+    Result syncToday();
+    Result removeData(int startDate);
     //分析股票数据
-    void analyseData(Stock* stock=nullptr);
+    Result analyseData(Stock* stock);
     //是否有任务未处理完
     bool isBusy(){return mTaskCount>0||mPool.activeThreadCount()>0;}
     //判断表是否存在
@@ -132,11 +147,14 @@ public:
     //日期转换
     static QString int2StrTime(int time){return QString::number(time).insert(6,'-').insert(4,'-');}
     static int str2IntTime(QString time){return time.remove('-').toInt();}
+    //错误代码转字符串
+    static QString Result2Msg(Result r);
 
 public slots:
     void onTaskFinished(QSharedPointer<StockTask> task);
 
 signals:
+    void sendTaskStart(StockTask* task);
     void sendTaskFinished(QSharedPointer<StockTask> task);
     void sendSyncProgress(float progress);
     void sendMessage(int type, QString msg);

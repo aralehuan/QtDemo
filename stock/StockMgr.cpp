@@ -16,6 +16,7 @@ StockMgr::StockMgr()
     :mTaskCount(0)
     ,mMinDate(0)
     ,mMaxDate(0)
+    ,mSaving(false)
 {
     //线程通信信号槽
     connect(this, SIGNAL(sendTaskFinished(QSharedPointer<StockTask>)), this, SLOT(onTaskFinished(QSharedPointer<StockTask>)), Qt::ConnectionType::QueuedConnection);
@@ -34,7 +35,19 @@ QString StockMgr::init()
         mPool.setMaxThreadCount(1);
         //同步股票列表数据
         loadStocks(threadDB.getDB());
-        startTask(new PullStocksTask(TaskFlag::InitSync));
+        startTask(new PullStocksTask(TaskFlag::InitList));
+        //同步参考股票(其他股票以该股票日期做参考，避免每次无效请求)
+        QDate now = QDate::currentDate();
+        int cur = now.year()*10000+now.month()*100+now.day();
+        Stock* sk = getRefStock();
+        QDate min2(sk->minDate/10000, sk->minDate%10000/100, sk->minDate%100);
+        QDate min1 = min2.addMonths(-1);
+        int minBegin = min1.year()*10000+min1.month()*100+min1.day();
+        if(minBegin<OLDEST_YEAR_DAY)minBegin=OLDEST_YEAR_DAY;
+        startTask(new PullHistoryTask(sk, TaskFlag::InitMinDate, minBegin, min2.year()*10000+min2.month()*100+min2.day()));
+        QDate max2(cur/10000, cur%10000/100, cur%100);
+        QDate max1 = max2.addMonths(-1);
+        startTask(new PullHistoryTask(sk, TaskFlag::InitMaxDate, max1.year()*10000+max1.month()*100+max1.day(), max2.year()*10000+max2.month()*100+max2.day()));
     }
     while (false);
     return nullptr;
@@ -49,115 +62,82 @@ void StockMgr::deinit()
     Py_Finalize();
 }
 
-void StockMgr::syncData(Stock* stock)
+Result StockMgr::syncData(Stock* stock)
 {
-    if(isBusy())
-    {
-        emit sendMessage(MsgType::MessageBox, QString("[同步]正在后台处理数据,稍好再试"));
-        return;
-    }
-
-    if(mMinDate==0||mMaxDate==0)
-    {
-        getValideDate(mMinDate, mMaxDate);
-    }
+    if(isBusy())return Result::Busy;
+    Stock* ref = getRefStock();
+    if(ref->minDate<=0||ref->maxDate<=0)return Result::DateError;
 
     QDate now = QDate::currentDate();
     int cur = now.year()*10000+now.month()*100+now.day();
-    if(stock!=nullptr)
-    {
-        int min = stock->minDate;
-        int max= stock->maxDate;
-         if(mMaxDate>0 && max<mMaxDate && max<cur)
-        {//最新数据没有
-           if(max<=0)max=now.year()*10000+101;//仅取今年数据
-           qDebug()<<"sync "<<stock->code<<":"<<max<<","<<cur;
-           startTask(new PullHistoryTask(stock,SyncData,max,cur));
-        }
-
-        if(mMinDate>0 && min>mMinDate && min>stock->marketTime && min>OLDEST_YEAR_DAY)
-        {//如果有更早的数据，就再取前3年的数据
-            int older = min-30000<OLDEST_YEAR_DAY?OLDEST_YEAR_DAY:min-30000;
-            qDebug()<<"sync "<<stock->code<<":"<<older<<","<<min;
-            startTask(new PullHistoryTask(stock,SyncData,older,min));
-        }
-        return;
+    int min = stock->minDate;
+    int max= stock->maxDate;
+     if(max<ref->maxDate && max<cur)
+    {//最新数据没有
+       if(max<=0)max=now.year()*10000+101;//仅取今年数据
+       qDebug()<<"sync "<<stock->code<<":"<<max<<","<<cur;
+       startTask(new PullHistoryTask(stock,SyncData,max,cur));
     }
 
-    for(int i=0;i<mStocks.length();++i)
-    {
-        Stock* stock = mStocks[i];
-        if(stock->blacklist)continue;
-        int min = stock->minDate;
-        int max= stock->maxDate;
-        if(mMaxDate>0 && max<mMaxDate && max<cur)
-        {//最新数据没有
-           if(max<=0)max=now.year()*10000+101;//仅取今年数据
-           qDebug()<<"sync "<<stock->code<<":"<<max<<","<<cur;
-           startTask(new PullHistoryTask(stock,SyncData,max,cur));
-        }
-
-        if(mMinDate>0 && min>mMinDate && min>stock->marketTime && min>OLDEST_YEAR_DAY)
-        {//如果有更早的数据，就再取前3年的数据
-            int older = min-30000<OLDEST_YEAR_DAY?OLDEST_YEAR_DAY:min-30000;
-            qDebug()<<"sync "<<stock->code<<":"<<older<<","<<min;
-            startTask(new PullHistoryTask(stock,SyncData,older,min));
-        }
+    if(max>0&&min>ref->minDate && min>stock->marketTime && min>OLDEST_YEAR_DAY)
+    {//如果有更早的数据，就再取前3年的数据
+        int older = min-30000<OLDEST_YEAR_DAY?OLDEST_YEAR_DAY:min-30000;
+        qDebug()<<"sync "<<stock->code<<":"<<older<<","<<min;
+        startTask(new PullHistoryTask(stock,SyncData,older,min));
     }
+    return Result::Ok;
 }
 
-void StockMgr::saveData()
+Result StockMgr::syncToday()
 {
-    if(isBusy())
-    {
-        emit sendMessage(MsgType::MessageBox, QString("[保存]正在后台处理数据,稍好再试"));
-        return;
-    }
+    QDate now = QDate::currentDate();
+    QTime time = QTime::currentTime();
+    int curDate = now.year()*10000+now.month()*100+now.day();
+    if(time.hour()<10||time.hour()>22)return Result::NotInTime;
+    if(isBusy())return Result::Busy;
+    startTask(new PullTodayTask(SyncData,curDate));
+    return Result::Ok;
+}
+
+Result StockMgr::saveData()
+{
+    if(mSaving)return Result::Saving;
+    mSaving=true;
+    const QList<Stock*>& stocks = StockMgr::single()->getStocks();
+    for(int i=0;i<stocks.length();++i)stocks[i]->prepareSave();
     startTask(new SaveDBTask(SaveDB));
+    return Result::Ok;
 }
 
-void StockMgr::checkData(Stock* stock)
+Result StockMgr::checkData(Stock* stock)
 {
-    if(isBusy())
-    {
-        emit sendMessage(MsgType::MessageBox, QString("[校验]正在后台处理数据,稍好再试"));
-        return;
-    }
-
-    if(stock!=nullptr)
-    {
-        startTask(new CheckTask(stock,TaskFlag::Check));
-        return;
-    }
-
-    for(int i=0;i<mStocks.length();++i)
-    {
-        Stock* sk = mStocks[i];
-        if(sk->blacklist)continue;
-        startTask(new CheckTask(sk,TaskFlag::Check));
-    }
+    if(isBusy())return Result::Busy;
+    startTask(new CheckTask(stock,TaskFlag::Check));
+    return Result::Ok;
 }
 
-void StockMgr::analyseData(Stock* stock)
+Result StockMgr::analyseData(Stock* stock)
 {
-    if(isBusy())
-    {
-        emit sendMessage(MsgType::MessageBox, QString("[分析]正在后台处理数据,稍好再试"));
-        return;
-    }
+    if(isBusy())return Result::Busy;
+    startTask(new AnalyseTask(stock,TaskFlag::Analyse));
+    return Result::Ok;
+}
 
-    if(stock!=nullptr)
+Result StockMgr::removeData(int startDate)
+{
+    if(isBusy())return Result::Busy;
+    Stock* ref = StockMgr::single()->getRefStock();
+    QSqlDatabase& db = threadDB.getDB();
+    db.transaction();
+    const QList<Stock*>& ss = StockMgr::single()->getStocks();
+    for(int i=0;i<ss.count();++i)
     {
-        startTask(new AnalyseTask(stock,TaskFlag::Analyse));
-        return;
+        Stock* s = ss[i];
+        if(s==ref)continue;
+        s->removeHistory(startDate);
     }
-
-    for(int i=0;i<mStocks.length();++i)
-    {
-        Stock* sk = mStocks[i];
-        if(sk->blacklist)continue;
-        startTask(new AnalyseTask(sk,TaskFlag::Analyse));
-    }
+    db.commit();
+    return Result::Ok;
 }
 
 Stock* StockMgr::getStock(QString code,bool create)
@@ -186,61 +166,6 @@ bool StockMgr::exist(QSqlDatabase& db, QString table, QString where)
         if(query.exec())return query.next();
     }
     throw QString("sql 执行失败");
-}
-
-void StockMgr::getValideDate(int& minDate, int& maxDate)
-{
-    minDate = maxDate = 0;
-    QDate now = QDate::currentDate();
-    int cur = now.year()*10000+now.month()*100+now.day();
-    Stock* sk = getStock("000001");
-    QDate date(sk->minDate/10000, sk->minDate%10000/100, sk->minDate%100);
-    QDate date2 = date.addMonths(-1);
-    QString begin = StockMgr::int2StrTime(date2.year()*10000+date2.month()*100+date2.day());
-    QString end   = StockMgr::int2StrTime(date.year()*10000+date.month()*100+date.day());
-    PyObject* pyFunc = PyObject_GetAttrString(gPythonMod,"get_ticket");
-    PyObject *pArgs = PyTuple_New(4);
-    PyTuple_SetItem(pArgs, 0, Py_BuildValue("s", "000001"));
-    PyTuple_SetItem(pArgs, 1, Py_BuildValue("s", begin.toLatin1().data()));
-    PyTuple_SetItem(pArgs, 2, Py_BuildValue("s", end.toLatin1().data()));
-    PyTuple_SetItem(pArgs, 3, Py_BuildValue("i", sk->market()));
-    PyObject* pyRet  = PyObject_CallObject(pyFunc, pArgs);
-    do
-    {
-        char* json;
-        PyArg_Parse(pyRet,"s",&json);
-        if(json==nullptr)break;
-        QJsonParseError json_error;
-        QJsonDocument jdoc = QJsonDocument::fromJson(json, &json_error);
-        if(json_error.error != QJsonParseError::NoError)break;
-        QJsonObject rootObj = jdoc.object();
-        QJsonArray datas = rootObj.value("data").toArray();
-        if(datas.count()<1)break;
-        minDate = StockMgr::str2IntTime(datas[datas.count()-1].toObject().value("date").toString());
-    }while(false);
-
-
-    QDate date3(cur/10000, cur%10000/100, cur%100);
-    QDate date4 = date3.addMonths(-1);
-    begin = StockMgr::int2StrTime(date4.year()*10000+date4.month()*100+date4.day());
-    end   = StockMgr::int2StrTime(date3.year()*10000+date3.month()*100+date3.day());
-    PyTuple_SetItem(pArgs, 1, Py_BuildValue("s", begin.toLatin1().data()));
-    PyTuple_SetItem(pArgs, 2, Py_BuildValue("s", end.toLatin1().data()));
-    pyRet  = PyObject_CallObject(pyFunc, pArgs);
-    do
-    {
-        char* json;
-        PyArg_Parse(pyRet,"s",&json);
-        if(json==nullptr)break;
-        QJsonParseError json_error;
-        QJsonDocument jdoc = QJsonDocument::fromJson(json, &json_error);
-        if(json_error.error != QJsonParseError::NoError)break;
-        QJsonObject rootObj = jdoc.object();
-        QJsonArray datas = rootObj.value("data").toArray();
-        if(datas.count()<1)break;
-        maxDate = StockMgr::str2IntTime(datas[0].toObject().value("date").toString());
-    }while(false);
-    qDebug()<<"valide date range:"<<minDate<<"->"<<maxDate;
 }
 
 QString StockMgr::createTable(QSqlDatabase& db)
@@ -297,8 +222,26 @@ void StockMgr::onTaskFinished(QSharedPointer<StockTask> sharetask)
     StockTask* task = sharetask.get();
     task->onFinished();
     emit sendMessage(TaskCount,"");
-    if(task->mTaskFlag==SyncData && mTaskCount<1)
+    if(task->mTaskFlag == TaskFlag::SaveDB)
     {
-        saveData();
+        mSaving=false;
     }
+}
+
+QString StockMgr::Result2Msg(Result r)
+{
+    switch(r)
+    {
+    case Result::Ok:
+        return "";
+    case Result::Busy:
+        return "后台任务忙";
+    case Result::Saving:
+        return "正在保存数据";
+    case Result::DateError:
+        return "参考日期错误";
+    case Result::NotInTime:
+        return "工作时间段为早10点到晚10点之间";
+    }
+    return "未知错误";
 }

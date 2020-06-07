@@ -53,12 +53,26 @@ const QList<KData*>& Stock::getHistory()
      }
      std::sort(history.begin(),history.end(),[](const KData* a,const KData* b){return a->date>b->date;});
      loaded=true;
+     validHistory.clear();
     return history;
+}
+
+const QList<KData*>& Stock::getValidHistory()
+{
+    if(!validHistory.isEmpty())return validHistory;
+    const QList<KData*> ls =  getHistory();
+    for(int i=0;i<ls.size();++i)
+    {
+        KData* k = ls[i];
+        if(k->high==0)continue;//停盘数据
+        validHistory.push_back(k);
+    }
+    return validHistory;
 }
 
 bool Stock::save()
 {
-    if(!dirty)return true;
+    if(waitSave==nullptr)return true;
     StockMgr::single()->sendMessage(MsgType::Info, QString("保存股票 code="+code));
     QString sql;
     QString where = QString("code='%1'").arg(code);
@@ -67,14 +81,14 @@ bool Stock::save()
     if(StockMgr::exist(db, "Stocks", where))
     {
         query.prepare(QString("UPDATE Stocks SET industry=?,area=?,totals=?,outstanding=?,timeToMarket=?,minDate=?,maxDate=?,blacklist=? WHERE %1").arg(where));
-        query.addBindValue(industry);
-        query.addBindValue(area);
-        query.addBindValue(total);
-        query.addBindValue(out);
-        query.addBindValue(marketTime);
-        query.addBindValue(minDate);
-        query.addBindValue(maxDate);
-        query.addBindValue(blacklist);
+        query.addBindValue(waitSave->industry);
+        query.addBindValue(waitSave->area);
+        query.addBindValue(waitSave->total);
+        query.addBindValue(waitSave->out);
+        query.addBindValue(waitSave->marketTime);
+        query.addBindValue(waitSave->minDate);
+        query.addBindValue(waitSave->maxDate);
+        query.addBindValue(waitSave->blacklist);
         if(!query.exec())
         {
             StockMgr::single()->notifyMessage(MsgType::Error, QString("股票代号"+code+"更新记录失败!"));
@@ -95,7 +109,7 @@ bool Stock::save()
                 %8, \
                 %9, \
                 %10 \
-                );").arg(code).arg(name).arg(industry).arg(area).arg(total).arg(out).arg(marketTime).arg(minDate).arg(maxDate).arg(blacklist);
+                );").arg(waitSave->code).arg(waitSave->name).arg(waitSave->industry).arg(waitSave->area).arg(waitSave->total).arg(waitSave->out).arg(waitSave->marketTime).arg(waitSave->minDate).arg(waitSave->maxDate).arg(waitSave->blacklist);
         query.prepare(sql);
         if(!query.exec())
         {
@@ -104,12 +118,11 @@ bool Stock::save()
         }
     }
 
-    if(history.size()>0)createTable(db);
+    if(waitSave->history.size()>0)createTable(db);
     QString tbName = "X"+code;
-    for(int m=0;m<history.size();++m)
+    for(int m=0;m<waitSave->history.size();++m)
     {//最新数据在最前面
-        KData* k = history[m];
-        if(!k->dirty)continue;
+        KData* k = waitSave->history[m];
         QString sql = QString("INSERT OR IGNORE INTO %1 (date,high,open,close,low,volume,amount) VALUES \
                (  \
                '%2', \
@@ -157,6 +170,7 @@ void Stock::mergeHistory(const QList<KData*>& ls)
             k->dirty=true;
         }
     }
+    validHistory.clear();
 }
 
 void Stock::reset()
@@ -167,25 +181,53 @@ void Stock::reset()
     maxDate = 0;
     history.clear();
     dirty=true;
+    validHistory.clear();
 }
 
-void Stock::removeHistory(int beginDate, int endDate)
+void Stock::removeHistory(int startDate)
 {
-    QSqlQuery query(threadDB.getDB());
-    if(!query.exec(QString("delete from X%1 where date >= %2 and date <= %3").arg(code).arg(beginDate).arg(endDate)))return;
     getHistory();
+    QSqlQuery query(threadDB.getDB());
+    if(!query.exec(QString("delete from X%1 where date >= %2").arg(code).arg(startDate)))return;
     for(int i=history.size()-1;i>=0;--i)
     {
-        if(history[i]->date>=beginDate&&history[i]->date<=endDate)history.removeAt(i);
+        if(history[i]->date>=startDate)history.removeAt(i);
     }
-    minDate = 88880808;
-    maxDate = 0;
-    for(int i=0;i<history.size();++i)
+
+    for(int i=validHistory.size()-1;i>=0;--i)
     {
-        KData* k = history[i];
-        if(k->date>maxDate)maxDate=k->date;
-        if(k->date<minDate)minDate=k->date;
+        if(validHistory[i]->date>=startDate)validHistory.removeAt(i);
+    }
+
+    if(startDate<=minDate)
+    {
+        minDate = 88880808;
+        maxDate=0;
+    }
+
+    if(history.size()>0)
+    {
+        maxDate = history[0]->date;
     }
     dirty=true;
+}
+
+
+void Stock::prepareSave()
+{
+    if(!dirty)return;
+    if(waitSave==nullptr)waitSave=new Stock(code);
+    *waitSave = *this;
+    waitSave->minDate = this->minDate;
+    waitSave->maxDate= this->maxDate;
+    waitSave->blacklist =this->blacklist;
+    for(int i=0;i<history.length();++i)
+    {
+         KData* k = history[i];
+         if(!k->dirty)continue;
+         k->dirty=false;
+         waitSave->history.push_back(k);
+    }
+    this->dirty=false;
 }
 

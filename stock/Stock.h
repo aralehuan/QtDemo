@@ -3,11 +3,20 @@
 #include <QList>
 #include <QSqlDatabase>
 #include <QDebug>
+#include "utility/RWLock.h"
+
+enum StockState
+{
+    DataNotNew=0x0001,//数据不是最新
+    DataLose    =0x0002,//中间数据丢失
+    DataError    =0x0004,//数据有误
+};
 
 class KData
 {
 public:
     bool dirty;
+    int    user;
     //基础数据
     int    date;//yyyyMMdd
     float high;
@@ -35,13 +44,29 @@ public:
 
 struct AnalyseInfo
 {
-    int yearUp;
+    int yearUp; //本年上涨天数
     int yearDown;
-    int monthUp;
+    int monthUp;//本月上涨天数
     int monthDown;
+    int sevenUp;//近7天上涨天数
+    int sevenDown;
+    int continueRiseDay;//连续上涨天数
+    float continueRiseRate;//连续累计涨幅
     AnalyseInfo()
     {
          memset(this, 0, sizeof(AnalyseInfo));
+    }
+};
+
+struct CheckInfo
+{
+    int    state;
+    int    firstDate;//最新的日期
+    int    firstErrorDate;//检测到的第一个错误数据时间
+    int    firstLoseDate;//检测到的第一个丢失数据时间
+    CheckInfo()
+    {
+         memset(this, 0, sizeof(CheckInfo));
     }
 };
 
@@ -63,10 +88,13 @@ public:
     int     maxDate;//日k结束时间
     bool  blacklist;
     AnalyseInfo mAnalyseInfo;
+    CheckInfo   mCheckInfo;
 
 private:
     bool  dirty;
+    Stock* waitSave;
     QList<KData*> history;
+    QList<KData*> validHistory;
     void createTable(QSqlDatabase& db);
     void reqHistory();
 public:
@@ -88,15 +116,18 @@ public:
         ,maxDate(0)
         ,blacklist(false)
         ,dirty(false)
+        ,waitSave(nullptr)
     {}
     const QList<KData*>& getHistory();
+    const QList<KData*>& getValidHistory();
     bool save();
     void reset();
-    void removeHistory(int beginDate, int endDate);
     void mergeHistory(const QList<KData*>& ls);
+    void removeHistory(int startDate);
     int market(){return code.startsWith("00")||code.startsWith("30")?1:0;}
     void setDirty(){dirty=true;}
-    void clearDirty(){dirty=false;for(int i=0;i<history.size();++i)history[i]->dirty=false;}
+    void clearDirty(){if(waitSave!=nullptr)delete  waitSave;waitSave=nullptr;}
+    void prepareSave();
 
     friend class  StockMgr;
 };

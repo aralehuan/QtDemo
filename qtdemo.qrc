@@ -6,10 +6,11 @@
         <file>Res/blacklist.jpg</file>
         <file>Res/spyder.png</file>
         <file>Res/check.jpg</file>
+        <file>Res/rabbit.png</file>
     </qresource>
     <qresource prefix="/gif">
         <file>Res/loading.gif</file>
-        <file>Res/loading2.gif</file>
+        <file>Res/saving.gif</file>
     </qresource>
     <qresource prefix="/icon">
         <file>Res/stock.jpg</file>

@@ -60,6 +60,67 @@ void PullHistoryTask::onFinished()
     mStock->mergeHistory(cach);
 }
 
+void PullTodayTask::run()
+{
+    //获取股票数
+    PyObject* pyFunc = PyObject_GetAttrString(gPythonMod,"get_today_stock_count");
+    PyObject* pyRet  = PyObject_CallObject(pyFunc, nullptr);
+    int count=0;
+    PyArg_Parse(pyRet,"i",&count);
+    //分页获取股票数据
+    int pageSize = 500;
+    int pages=(count+pageSize-1)/pageSize;
+    pyFunc = PyObject_GetAttrString(gPythonMod,"get_today_all");
+    for(int i=0;i<pages;++i)
+    {
+        PyObject *pArgs = PyTuple_New(2);
+        PyTuple_SetItem(pArgs, 0, Py_BuildValue("i", i+1));
+        PyTuple_SetItem(pArgs, 1, Py_BuildValue("i", pageSize));
+        PyObject* pyRet  = PyObject_CallObject(pyFunc, pArgs);
+        char* json;
+        PyArg_Parse(pyRet,"s",&json);
+        QJsonParseError json_error;
+        QJsonDocument jdoc = QJsonDocument::fromJson(json, &json_error);
+        if(json_error.error != QJsonParseError::NoError)break;
+        QJsonObject rootObj = jdoc.object();
+        QJsonArray datas = rootObj.value("data").toArray();
+        for(int i=0;i<datas.count();++i)
+        {
+            QJsonObject data = datas[i].toObject();
+            QString code = data.value("code").toVariant().toString();
+            KData* k = new KData();
+            k->date  = date;
+            k->open = data.value("open").toVariant().toFloat();
+            k->high  = data.value("high").toVariant().toFloat();
+            k->low    = data.value("low").toVariant().toFloat();
+            k->close = data.value("close").toVariant().toFloat();
+            k->volume = data.value("volume").toVariant().toDouble()*100;//东方财富以手为单位1手100股
+            k->amount = data.value("amount").toVariant().toDouble();
+            cach[code]=k;
+        }
+
+        QThread::msleep(1000);//一秒爬一次
+    }
+    StockMgr::single()->notifyTaskFinished(this);
+}
+
+void PullTodayTask::onFinished()
+{
+    QMap<QString, KData*>::iterator it = cach.begin();
+     while (it != cach.end())
+     {
+         KData* k = it.value();
+         Stock* s = StockMgr::single()->getStock(it.key(),false);
+         if(s!=nullptr)
+         {
+             QList<KData*> ls;
+             ls.push_back(k);
+             s->mergeHistory(ls);
+         }
+         it++;
+     }
+}
+
 void PullStocksTask::run()
 {
     PyObject* pyFunc = PyObject_GetAttrString(gPythonMod,"get_tickets");
@@ -100,6 +161,7 @@ void PullStocksTask::onFinished()
 void SaveDBTask::run()
 {
     qDebug()<<"save begin";
+    StockMgr::single()->notifyTaskStart(this);
     QSqlDatabase& db = threadDB.getDB();
     //开启事务(先提交到缓存，避免频繁的打开关闭文件操作，一次性写入)
     db.transaction();
@@ -110,11 +172,8 @@ void SaveDBTask::run()
         if(!sk->save())break;
     }
     //提交事务
-    if(db.commit())
-    {
-        for(int i=0;i<stocks.length();++i)stocks[i]->clearDirty();
-    }
-    else
+    commitOK = db.commit();
+    if(!commitOK)
     {
         qDebug()<<"save db rollback";
         db.rollback();
@@ -124,32 +183,69 @@ void SaveDBTask::run()
     StockMgr::single()->notifyTaskFinished(this);
 }
 
+void SaveDBTask::onFinished()
+{
+    if(!commitOK)return;
+    const QList<Stock*>& stocks = StockMgr::single()->getStocks();
+    for(int i=0;i<stocks.length();++i)stocks[i]->clearDirty();
+}
+
 void AnalyseTask::run()
 {
     //低量连涨
     //板块联动
     //支撑上涨
     //大单小涨
+    std::chrono::time_point<std::chrono::high_resolution_clock> p0 = std::chrono::high_resolution_clock::now();
     QDate now = QDate::currentDate();
-    const QList<KData*>& ls = mStock->getHistory();
-    for(int i=0;i<ls.size();++i)
+    const QList<KData*>& ls = mStock->getValidHistory();
+    for(int i=0,count=ls.size();i<count;++i)
     {
         KData* kd = ls[i];
+        kd->change = i<count-1?(kd->close-ls[i+1]->close)/ls[i+1]->close : 0;
+    }
+
+    float lastPrice = ls.empty()?0:ls[0]->close;
+    for(int i=0,count=ls.size();i<count;++i)
+    {
+        KData* kd = ls[i];
+        if(kd->change<0)
+        {
+            data.continueRiseRate = (lastPrice-kd->close)/kd->close;
+            break;
+        }
+        ++data.continueRiseDay;
+    }
+
+    for(int i=0;i<ls.size();++i)
+    {
+         KData* kd = ls[i];
+        //本年
         if(kd->date/10000 > now.year())continue;
         if(kd->date/10000 < now.year())break;
-        if(kd->close > kd->open)
+        if(kd->change > 0)
             ++data.yearUp;
-        else if(kd->close < kd->open)
+        else if(kd->change < 0)
             ++data.yearDown;
+
+        //本月
         int month = kd->date%10000/100;
-        if(month == now.month())
-        {
-            if(kd->close > kd->open)
-                ++data.monthUp;
-            else if(kd->close < kd->open)
-                ++data.monthDown;
-        }
+        if(month != now.month())continue;
+        if(kd->change > 0)
+            ++data.monthUp;
+        else if(kd->change < 0)
+            ++data.monthDown;
+
+        //近7天
+        if(i>=7)continue;
+        if(kd->change > 0)
+            ++data.sevenUp;
+        else if(kd->change < 0)
+            ++data.sevenDown;
     }
+    std::chrono::time_point<std::chrono::high_resolution_clock> p1 = std::chrono::high_resolution_clock::now();
+    float ms = (float)std::chrono::duration_cast<std::chrono::microseconds>(p1 - p0).count() / 1000;
+    qDebug()<<"analyse "<<mStock->code<<"use "<<ms <<"ms";
     StockMgr::single()->notifyTaskFinished(this);
 }
 
@@ -159,21 +255,45 @@ void AnalyseTask::onFinished()
 }
 
 void CheckTask::run()
-{
-    //参考
-    const QList<KData*>& ck = StockMgr::single()->getStock("000001")->getHistory();//保证000001数据是最全的
-    const QList<KData*>& ls = mStock->getHistory();
-    for(int i=0,m=0;i>ck.count()&&m<ls.size();++i)
+{;
+    //参考股
+    Stock* ref = StockMgr::single()->getRefStock();
+    const QList<KData*>& refHis = ref->getHistory();
+
+    if(mStock->maxDate<ref->maxDate)
     {
-        if(ck[i]->date>ls[0]->date)continue;
-        if(ck[i]->date == ls[m++]->date)continue;
-        err|=Error::LoseDate;
-        break;
+        data.state |= StockState::DataNotNew;
+    }
+
+    const QList<KData*>& ls = mStock->getHistory();
+    int count = ls.count();
+    if(count>0)
+    {
+        data.firstDate = ls[0]->date;
+        int m = 0;
+        while(m<refHis.count() && refHis[m]->date>ls[0]->date)++m;
+        for(int i=0;i<ls.length();++i)
+        {
+             KData* kd = ls[i];
+             if(kd->avg<kd->low-0.01f || kd->avg>kd->high+0.01f)
+             {
+                 data.state |= StockState::DataError;
+                 data.firstErrorDate = kd->date;
+                 break;
+             }
+
+             if(kd->date!=refHis[m++]->date)
+             {
+                 data.state |= StockState::DataLose;
+                 data.firstLoseDate = kd->date;
+                 break;
+             }
+        }
     }
     StockMgr::single()->notifyTaskFinished(this);
 }
 
 void CheckTask::onFinished()
 {
-
+    mStock->mCheckInfo = data;
 }

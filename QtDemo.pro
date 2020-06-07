@@ -28,6 +28,7 @@ CONFIG += c++11
 SOURCES += \
     stock/stockdata.cpp \
     stock/StockMgr.cpp \
+    utility/RWLock.cpp \
     main.cpp \
     MainWindow.cpp \
     KMapWidget.cpp \
@@ -35,7 +36,8 @@ SOURCES += \
     qcustomplot.cpp \
     LoadingDlg.cpp \
     stock/Stock.cpp \
-    stock/StockTask.cpp
+    stock/StockTask.cpp \
+    MyToolAction.cpp
 
 
 HEADERS += \
@@ -48,6 +50,7 @@ HEADERS += \
     utility/concurrentqueue.h \
     utility/MsgQueue.hpp \
     utility/TimerManager.hpp \
+    utility/RWLock.h \
     MainWindow.h \
     stdafx.h \
     KMapWidget.h \
@@ -55,7 +58,8 @@ HEADERS += \
     qcustomplot.h \
     LoadingDlg.h \
     stock/Stock.h \
-    stock/StockTask.h
+    stock/StockTask.h \
+    MyToolAction.h
 
 
 FORMS += \

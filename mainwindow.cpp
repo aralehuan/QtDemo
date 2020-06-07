@@ -4,11 +4,23 @@
 #include <QScrollArea>
 #include <QSettings>
 #include <QMenu>
+#include <QMovie>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QRegExpValidator>
 #include "MainWindow.h"
 #include "ui_mainwindow.h"
 #include "LoadingDlg.h"
+#include "MyToolAction.h"
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow),selectedStock(nullptr),timerID(0),syncStockIndex(0)
+MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
+  ,selectedStock(nullptr)
+  ,syncTimer(0)
+  ,syncIndex(0)
+  ,checkTimer(0)
+  ,checkIndex(0)
+  ,analyseTimer(0)
+  ,analyseIndex(0)
 {
     ui->setupUi(this);
     //设置系统托盘
@@ -33,6 +45,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     //信号槽
     qRegisterMetaType<QSharedPointer<StockTask>>("QSharedPointer<StockTask>");
     connect(ui->kmap, SIGNAL(selectK(KData*)), this, SLOT(on_k_select(KData*)) );
+    connect(StockMgr::single(), SIGNAL(sendTaskStart(StockTask*)), this, SLOT(onTaskStart(StockTask*)), Qt::ConnectionType::QueuedConnection);
     connect(StockMgr::single(), SIGNAL(sendTaskFinished(QSharedPointer<StockTask>)), this, SLOT(onTaskFinished(QSharedPointer<StockTask>)), Qt::ConnectionType::QueuedConnection);
     connect(StockMgr::single(), SIGNAL(sendSyncProgress(float)), this, SLOT(onSyncProgress(float)), Qt::ConnectionType::QueuedConnection);
     connect(StockMgr::single(), SIGNAL(sendMessage(int, QString)), this, SLOT(onMessage(int, QString)), Qt::ConnectionType::QueuedConnection);
@@ -56,18 +69,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     for(int i=0;i<ls.count();++i)
     {
         Stock*  sk = ls[i];
-        ui->stockTable->setItem(i,0,new QTableWidgetItem(sk->code));
-        ui->stockTable->setItem(i,1,new QTableWidgetItem(sk->name));
-        ui->stockTable->setItem(i,2,new QTableWidgetItem(sk->industry));
-        ui->stockTable->setItem(i,3,new QTableWidgetItem(sk->area));
-        ui->stockTable->setItem(i,4,new QTableWidgetItem(QString::number(sk->marketTime, 10)));
-        ui->stockTable->setItem(i,5,new QTableWidgetItem("-"));
-        ui->stockTable->setItem(i,6,new QTableWidgetItem("-"));
-        ui->stockTable->setItem(i,7,new QTableWidgetItem("-"));
-        ui->stockTable->setItem(i,8,new QTableWidgetItem("-"));
+        ui->stockTable->setItem(i,TB::DM,new QTableWidgetItem(sk->code));
+        ui->stockTable->setItem(i,TB::MC,new QTableWidgetItem(sk->name));
+        ui->stockTable->setItem(i,TB::HY,new QTableWidgetItem(sk->industry));
+        ui->stockTable->setItem(i,TB::DQ,new QTableWidgetItem(sk->area));
+        ui->stockTable->setItem(i,TB::SH,new QTableWidgetItem(QString::number(sk->marketTime, 10)));
+        ui->stockTable->setItem(i,TB::XJ,new QTableWidgetItem("-"));
+        ui->stockTable->setItem(i,TB::ZF,new QTableWidgetItem("-"));
+        ui->stockTable->setItem(i,TB::NZDB,new QTableWidgetItem("-"));
+        ui->stockTable->setItem(i,TB::YZDB,new QTableWidgetItem("-"));
         QTableWidgetItem* it =  new QTableWidgetItem(sk->blacklist?"√":"");
         it->setTextAlignment(Qt::AlignCenter);
-        ui->stockTable->setItem(i,9,it);
+        ui->stockTable->setItem(i,TB::HMD,it);
+        ui->stockTable->setItem(i,TB::ZT,new QTableWidgetItem("-"));
+        ui->stockTable->setItem(i,TB::RZDB,new QTableWidgetItem("-"));
+        ui->stockTable->setItem(i,TB::LZ,new QTableWidgetItem("-"));
     }
     init();
 }
@@ -99,7 +115,7 @@ void MainWindow::on_k_select(KData* k)
         ui->lbHigh->setText(QString::asprintf("高 %0.2f",k->high));
         ui->lbLow->setText(QString::asprintf("低 %0.2f",k->low));
         ui->lbAVG->setText(QString::asprintf("均 %0.2f",k->avg));
-        ui->lbVolume->setText(QString::asprintf("量 %0.2f",k->volume));
+        ui->lbVolume->setText(QString("量 ")+toMoney(k->volume));
         ui->lbAmount->setText(QString("额 ")+toMoney(k->amount));
         ui->lbChg->setText(QString::asprintf("涨 %0.2f",k->change));
     }
@@ -117,20 +133,10 @@ void MainWindow::on_k_select(KData* k)
     }
 }
 
-void MainWindow::on_toolSync_triggered()
-{
-    LoadingDlg::showLoading(this);
-    StockMgr::single()->syncData();
-}
-
-void MainWindow::on_toolAnalyse_triggered()
-{
-    StockMgr::single()->analyseData();
-}
-
 void MainWindow::on_toolSave_triggered()
 {
-    StockMgr::single()->saveData();
+    Result ret = StockMgr::single()->saveData();
+     if(ret!=Result::Ok)QMessageBox::information(this,"tip",StockMgr::Result2Msg(ret));
 }
 
 void  MainWindow::on_toolBlacklist_triggered()
@@ -145,42 +151,88 @@ void  MainWindow::on_toolBlacklist_triggered()
             sk->setDirty();
             QList<QTableWidgetItem*> ls = ui->stockTable->findItems(sk->code,Qt::MatchExactly);
             if(ls.size()<1)return;
-            ui->stockTable->item(ls[0]->row(),9)->setText("√");
+            ui->stockTable->item(ls[0]->row(),TB::HMD)->setText("√");
         }
     }
+}
+
+void MainWindow::on_toolQuickSync_triggered()
+{
+    Result ret = StockMgr::single()->syncToday();
+    if(ret!=Result::Ok)QMessageBox::information(this,"tip",StockMgr::Result2Msg(ret));
 }
 
 void MainWindow::on_toolSafeSync_triggered(bool checked)
 {
     if(checked)
     {
-        timerID = startTimer(2000);
+        syncTimer = startTimer(500);
     }
     else
     {
-        if(timerID!=0)killTimer(timerID);
-        timerID=0;
+        if(syncTimer!=0)killTimer(syncTimer);
+        syncTimer=0;
     }
 }
 
-void  MainWindow::on_tookCheck_triggered()
+void  MainWindow::on_tookCheck_triggered(bool checked)
 {
-    StockMgr::single()->checkData();
+    if(checked)
+    {
+        checkTimer = startTimer(10);
+    }
+    else
+    {
+        if(checkTimer!=0)killTimer(checkTimer);
+        checkTimer=0;
+    }
+}
+
+void MainWindow::on_toolAnalyse_triggered(bool checked)
+{
+    if(checked)
+    {
+        analyseTimer = startTimer(100);
+    }
+    else
+    {
+        if(analyseTimer!=0)killTimer(analyseTimer);
+        analyseTimer=0;
+    }
+}
+
+void MainWindow::on_toolRemove_triggered()
+{
+    qDebug()<<111;
+    QString s = dateEdit->text();
+    QRegExp regExp("^([1-9][0-9]{3})-((0([1-9]{1}))|(1[0-2]))-(([0-2]([1-9]{1}))|(3[0|1]))$");
+    if(!regExp.exactMatch(s))
+    {
+        QMessageBox::information(this,"tip","日期格式错误");
+        return;
+    }
+
+    int date =s.remove('-').toInt();
+    QMessageBox:: StandardButton r = QMessageBox::information(this,"tip","是否删除所有股票"+QString().number(date)+"日及以后的历史数据",QMessageBox::Yes | QMessageBox::No);
+    if(r == QMessageBox::Yes)StockMgr::single()->removeData(date);
 }
 
 void MainWindow::on_menuSync_triggered()
 {
-    StockMgr::single()->syncData(selectedStock);
+    Result ret = StockMgr::single()->syncData(selectedStock);
+    if(ret!=Result::Ok)QMessageBox::information(this,"tip",StockMgr::Result2Msg(ret));
 }
 
-void MainWindow::on_menuSave_triggered()
+void MainWindow::on_menuCheck_triggered()
 {
-    StockMgr::single()->saveData();
+    Result ret = StockMgr::single()->checkData(selectedStock);
+     if(ret!=Result::Ok)QMessageBox::information(this,"tip",StockMgr::Result2Msg(ret));
 }
 
 void MainWindow::on_menuAnalyse_triggered()
 {
-    StockMgr::single()->analyseData(selectedStock);
+    Result ret = StockMgr::single()->analyseData(selectedStock);
+     if(ret!=Result::Ok)QMessageBox::information(this,"tip",StockMgr::Result2Msg(ret));
 }
 
 void MainWindow::on_menuBlacklist_triggered(bool checked)
@@ -189,7 +241,7 @@ void MainWindow::on_menuBlacklist_triggered(bool checked)
     selectedStock->setDirty();
     QList<QTableWidgetItem*> ls = ui->stockTable->findItems(selectedStock->code,Qt::MatchExactly);
     if(ls.size()<1)return;
-    ui->stockTable->item(ls[0]->row(),9)->setText(checked?"√":"");
+    ui->stockTable->item(ls[0]->row(),TB::HMD)->setText(checked?"√":"");
 }
 
 void MainWindow::on_menuReset_triggered()
@@ -203,7 +255,8 @@ void MainWindow::on_stockTable_currentCellChanged(int currentRow, int currentCol
     QString code = ui->stockTable->item(currentRow,0)->text();
     selectedStock = StockMgr::single()->getStock(code,false);
     ui->kmap->setStock(selectedStock);
-    ui->statusBar->showMessage(selectedStock->name);
+    QString s = QString().sprintf("%s, 最新日期 %d 丢失日期 %d 错误日期 %d", selectedStock->name, selectedStock->mCheckInfo.firstDate, selectedStock->mCheckInfo.firstLoseDate, selectedStock->mCheckInfo.firstErrorDate);
+    ui->statusBar->showMessage(s);
 }
 
 void MainWindow::onTableSort(int col)
@@ -221,17 +274,55 @@ void MainWindow::on_stockTable_customContextMenuRequested(const QPoint &pos)
     tableMenu->exec(QCursor::pos());
 }
 
+void MainWindow::onTaskStart(StockTask* task)
+{
+    switch(task->mTaskFlag)
+    {
+    case TaskFlag::SaveDB:
+        savingLB->show();
+        break;
+    }
+}
+
 void MainWindow::onTaskFinished(QSharedPointer<StockTask> shareTask)
 {
     StockTask* task = shareTask.get();
-    if(task->mTaskFlag == TaskFlag::Analyse)
+    switch(task->mTaskFlag)
     {
-        QList<QTableWidgetItem*> ls = ui->stockTable->findItems(task->mStock->code,Qt::MatchExactly);
-        if(ls.size()<1)return;
-        AnalyseInfo& ad = task->mStock->mAnalyseInfo;
-        ui->stockTable->item(ls[0]->row(),7)->setText(QString().sprintf("%0.2f=%d/%d", ad.yearDown==0?366:1.0f*ad.yearUp/ad.yearDown, ad.yearUp, ad.yearDown));
-        ui->stockTable->item(ls[0]->row(),8)->setText(QString().sprintf("%0.2f=%d/%d", ad.monthDown==0?31:1.0f*ad.monthUp/ad.monthDown, ad.monthUp, ad.monthDown));
-         //if(StockMgr::single()->getTaskCount()<1)this->mSysTrayIcon->showMessage("tip","分析任务完成");//托盘气泡,弹出太多会卡顿
+    case TaskFlag::Analyse:
+        {
+            QList<QTableWidgetItem*> ls = ui->stockTable->findItems(task->mStock->code,Qt::MatchExactly);
+            if(ls.size()<1)break;
+            AnalyseInfo& ad = task->mStock->mAnalyseInfo;
+            if(ad.yearUp+ad.yearDown!=0)ui->stockTable->item(ls[0]->row(),TB::NZDB)->setText(QString().sprintf("%0.2f=%d/%d", ad.yearDown==0?366:1.0f*ad.yearUp/ad.yearDown, ad.yearUp, ad.yearDown));
+            if(ad.monthDown+ad.monthDown!=0)ui->stockTable->item(ls[0]->row(),TB::YZDB)->setText(QString().sprintf("%0.2f=%d/%d", ad.monthDown==0?31:1.0f*ad.monthUp/ad.monthDown, ad.monthUp, ad.monthDown));
+            if(ad.sevenUp+ad.sevenDown!=0)ui->stockTable->item(ls[0]->row(),TB::RZDB)->setText(QString().sprintf("%0.2f=%d/%d", ad.sevenDown==0?7:1.0f*ad.sevenUp/ad.sevenDown, ad.sevenUp, ad.sevenDown));
+            if(ad.continueRiseDay>0)ui->stockTable->item(ls[0]->row(),TB::LZ)->setText(QString().sprintf("%d,%0.2f", ad.continueRiseDay, ad.continueRiseRate));
+            break;
+        }
+    case TaskFlag::InitList:
+        saveTimer = startTimer(30000);//五分钟写一次数据库
+        break;
+    case TaskFlag::InitMaxDate:
+        maxDateLB->setText(QString().number(StockMgr::single()->getRefStock()->maxDate));
+        break;
+    case TaskFlag::InitMinDate:
+        minDateLB->setText(QString().number(StockMgr::single()->getRefStock()->minDate));
+        break;
+    case TaskFlag::SaveDB:
+        savingLB->hide();
+        break;
+    case TaskFlag::Check:
+        {
+            QList<QTableWidgetItem*> ls = ui->stockTable->findItems(task->mStock->code,Qt::MatchExactly);
+            if(ls.size()<1)break;
+            QString s;
+            if((task->mStock->mCheckInfo.state&StockState::DataNotNew)!=0)s.append("旧");
+            if((task->mStock->mCheckInfo.state&StockState::DataLose)!=0)s.append("缺");
+            if((task->mStock->mCheckInfo.state&StockState::DataError)!=0)s.append("错");
+            ui->stockTable->item(ls[0]->row(),TB::ZT)->setText(s);
+        }
+        break;
     }
 
     if(!ui->kmap->isShowing(task->mStock))return;
@@ -241,7 +332,7 @@ void MainWindow::onTaskFinished(QSharedPointer<StockTask> shareTask)
 void MainWindow::onSyncProgress(float progress)
 {
     if(progress>=1)LoadingDlg::hideLoading();
-    ui->progressBar->setValue(progress*100);
+    progressBar->setValue(progress*100);
 }
 
 void MainWindow::onMessage(int type, QString msg)
@@ -249,7 +340,7 @@ void MainWindow::onMessage(int type, QString msg)
     switch (type)
     {
     case MsgType::TaskCount:
-        ui->statusBar->showMessage(QString().sprintf("后台任务数:%d",  StockMgr::single()->getTaskCount()));
+        taskCountLB->setText(QString().sprintf("后台任务数:%d",  StockMgr::single()->getTaskCount()));
         break;
     case MsgType::MessageBox:
         QMessageBox::information(this,"tip",msg);
@@ -266,15 +357,70 @@ void MainWindow::init()
     //表格右键菜单
     tableMenu =  new QMenu(ui->stockTable);
     tableMenu->addAction(ui->menuSync);//在设计器里已添加的action
-    tableMenu->addAction(ui->menuSave);
+    tableMenu->addAction(ui->menuCheck);
     tableMenu->addAction(ui->menuAnalyse);
     tableMenu->addAction(ui->menuBlacklist);
     tableMenu->addSeparator();
     tableMenu->addAction(ui->menuReset);
+    //工具栏(图片下显示文字)
+    ui->toolBar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    ui->toolBar->insertSeparator(ui->space);
+    ui->toolBar->insertWidget(ui->space, actionCheck = new MyToolAction(ui->tookCheck,ui->toolBar));
+    ui->toolBar->insertSeparator(ui->space);
+    ui->toolBar->insertWidget(ui->space, actionAnalyse = new MyToolAction(ui->toolAnalyse,ui->toolBar));
+    ui->toolBar->addSeparator();
+    ui->toolBar->addWidget(actionSafeSync = new MyToolAction(ui->toolSafeSync,ui->toolBar));
+    ui->toolBar->addSeparator();
+    QVBoxLayout *layout = new QVBoxLayout();
+    layout->addWidget(dateEdit = new QLineEdit());
+    QDate now = QDate::currentDate();
+    dateEdit->setText(QString().sprintf("%d-%02d-%02d", now.year(), now.month(), now.day()));
+    QToolButton* bt = new QToolButton(this);
+    bt->setText("删除");
+    bt->setDefaultAction(ui->toolRemove);
+    bt->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);
+    layout->addWidget(bt);
+    layout->setMargin(2);
+    layout->setSpacing(1);
+    QWidget* w = new QWidget();
+    w->setFixedWidth(72);
+    w->setLayout(layout);
+    ui->toolBar->addWidget(w);
+    ui->toolBar->addSeparator();
+    connect(actionCheck, SIGNAL(sendReset()), this, SLOT(onCheckReset()));
+    connect(actionAnalyse, SIGNAL(sendReset()), this, SLOT(onAnalyseReset()));
+    connect(actionSafeSync, SIGNAL(sendReset()), this, SLOT(onSafeSyncReset()));
+    //状态栏初始化(无法通过设计器添加)
+    ui->statusBar->addPermanentWidget(progressBar=new QProgressBar());
+    ui->statusBar->addPermanentWidget(savingLB=new QLabel(""));
+    ui->statusBar->addPermanentWidget(taskCountLB=new QLabel("后台任务数:0"));
+    ui->statusBar->addPermanentWidget(minDateLB=new QLabel("0"));
+    ui->statusBar->addPermanentWidget(maxDateLB=new QLabel("0"));
+    progressBar->setRange(0,100);
+    progressBar->setValue(0);
+    progressBar->setFixedSize(120,24);
+    progressBar->setTextVisible(false);
+    progressBar->setOrientation(Qt::Horizontal);
+    savingLB->setMaximumSize(24,24);
+    savingLB->setMinimumSize(24,24);
+    QMovie *movie = new QMovie(":/gif/Res/saving.gif");
+    savingLB->setMovie(movie);
+    movie->setScaledSize(savingLB->size());
+    movie->start();
+    savingLB->hide();
+    taskCountLB->setMinimumSize(128,24);
+    taskCountLB->setFrameShape(QFrame::Panel);
+    taskCountLB->setFrameShadow(QFrame::Sunken);
+    minDateLB->setMinimumSize(64,24);
+    minDateLB->setFrameShape(QFrame::Panel);
+    minDateLB->setFrameShadow(QFrame::Sunken);
+    maxDateLB->setMinimumSize(64,24);
+    maxDateLB->setFrameShape(QFrame::Panel);
+    maxDateLB->setFrameShadow(QFrame::Sunken);
 }
 
- bool MainWindow::event(QEvent *event)
- {
+bool MainWindow::event(QEvent *event)
+{
      QEvent::Type et = event->type();
      switch (et)
      {
@@ -295,52 +441,82 @@ void MainWindow::init()
          default:
             return QWidget::event(event);
      }
- }
+}
 
- void MainWindow::closeEvent(QCloseEvent * event)
- {//拦截关闭按钮，隐藏程序不退出
+void MainWindow::closeEvent(QCloseEvent * event)
+{//拦截关闭按钮，隐藏程序不退出
     event->ignore();
     this->hide();
- }
+}
 
- void MainWindow::timerEvent(QTimerEvent *event)
- {
-    if(event->timerId()!=timerID)return;
+void MainWindow::timerEvent(QTimerEvent *event)
+{
     const QList<Stock*>& stocks = StockMgr::single()->getStocks();
-    for(;syncStockIndex<stocks.length();++syncStockIndex)
-    {
-        Stock* sk = stocks[syncStockIndex];
-        if(sk->blacklist)continue;
-        if(StockMgr::single()->isBusy())return;
-        StockMgr::single()->syncData(sk);
-        if(StockMgr::single()->getTaskCount()<1)continue;
+    int count = stocks.length();
+    int timeId = event->timerId();
+    if(timeId==analyseTimer)
+    {//分析
+        for(;analyseIndex<count;++analyseIndex)
+        {
+            Stock* sk = stocks[analyseIndex];
+            if(sk->blacklist)continue;
+            if(StockMgr::single()->analyseData(sk)==Result::Ok)++analyseIndex;
+            actionAnalyse->setProgress(1.0f*analyseIndex/count);
+            return;
+        }
     }
- }
+    else if(timeId==syncTimer)
+    {//同步
+        for(;syncIndex<count;++syncIndex)
+        {
+            Stock* sk = stocks[syncIndex];
+            if(sk->blacklist)continue;
+            if(StockMgr::single()->syncData(sk)==Result::Ok)++syncIndex;
+            actionSafeSync->setProgress(1.0f*syncIndex/count);
+            return;
+        }
+    }
+    else if(timeId==checkTimer)
+    {//检测
+        for(;checkIndex<count;++checkIndex)
+        {
+            Stock* sk = stocks[checkIndex];
+            if(sk->blacklist)continue;
+            if(StockMgr::single()->checkData(sk)==Result::Ok)++checkIndex;
+            actionCheck->setProgress(1.0f*checkIndex/count);
+            return;
+        }
+    }
+    else if(timeId==saveTimer)
+    {//存储
+        StockMgr::single()->saveData();
+    }
+}
 
- void MainWindow::onActivatedSysTrayIcon(QSystemTrayIcon::ActivationReason reason)
- {
-     switch(reason)
-     {
-         case QSystemTrayIcon::Trigger://单击托盘图标
-         case QSystemTrayIcon::DoubleClick: //双击托盘图标
-             this->showNormal();//正常大小显示
-             this->activateWindow();//显示到前面
-             break;
-         default:
-             break;
-         }
- }
+void MainWindow::onActivatedSysTrayIcon(QSystemTrayIcon::ActivationReason reason)
+{
+    switch(reason)
+    {
+     case QSystemTrayIcon::Trigger://单击托盘图标
+     case QSystemTrayIcon::DoubleClick: //双击托盘图标
+         this->showNormal();//正常大小显示
+         this->activateWindow();//显示到前面
+         break;
+     default:
+         break;
+     }
+}
 
- void MainWindow::onTrayMenuAutoStartTriggered(bool sel)
- {
-     setAutoStart(sel);
- }
+void MainWindow::onTrayMenuAutoStartTriggered(bool sel)
+{
+    setAutoStart(sel);
+}
 
- void MainWindow::onTrayMenuCloseTriggered()
- {
-     this->close();
-     QApplication::quit();
- }
+void MainWindow::onTrayMenuCloseTriggered()
+{
+    this->close();
+    QApplication::quit();
+}
 
 void MainWindow::setAutoStart(bool autoRun)
 {

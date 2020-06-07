@@ -22,7 +22,7 @@ public:
     virtual void onFinished(){};
 };
 
-//历史数据拉取任务
+//拉取单只股票历史数据
 class PullHistoryTask : public StockTask
 {
 protected:
@@ -31,6 +31,18 @@ protected:
     int mEndTime;
 public:
     PullHistoryTask(Stock* s, int flag, int beginTime, int endTime):StockTask(s,flag),mBeginTime(beginTime),mEndTime(endTime){}
+    void run();
+    void onFinished();
+};
+
+//拉取所有股票今日数据(可以快速同步今日数据)
+class PullTodayTask : public StockTask
+{
+protected:
+    int date;
+    QMap<QString,KData*> cach;
+public:
+    PullTodayTask(int flag,int day):StockTask(nullptr,flag),date(day){}
     void run();
     void onFinished();
 };
@@ -50,11 +62,11 @@ public:
 class SaveDBTask : public StockTask
 {
 protected:
-    QList<Stock> cach;
+    bool commitOK;
 public:
-    SaveDBTask(int flag):StockTask(nullptr,flag){}
+    SaveDBTask(int flag):StockTask(nullptr,flag),commitOK(false){}
     void run();
-    void onFinished(){};
+    void onFinished();
 };
 
 //股票分析任务
@@ -63,9 +75,10 @@ class  AnalyseTask : public StockTask
 protected:
     AnalyseInfo data;
 public:
-    AnalyseTask(Stock* s,int flag)
-        :StockTask(s,flag)
-    {}
+    AnalyseTask(Stock* s,int flag):StockTask(s,flag)
+    {
+        mStock->getValidHistory();//防止异步加载，先同步加载
+    }
     void run();
     void onFinished();
 };
@@ -73,16 +86,13 @@ public:
 //校验任务
 class  CheckTask : public StockTask
 {
+protected:
+    CheckInfo data;
 public:
-    enum Error
+    CheckTask(Stock* s,int flag) :StockTask(s,flag)
     {
-        LoseDate=0x0001,//日k数据丢失
-    };
-    int err;
-public:
-    CheckTask(Stock* s,int flag)
-        :StockTask(s,flag)
-    {}
+        mStock->getHistory();//防止异步加载，先同步加载
+    }
     void run();
     void onFinished();
 };
