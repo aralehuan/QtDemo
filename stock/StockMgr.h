@@ -97,8 +97,6 @@ private:
     QMutex mMutex;
     QWaitCondition mSyncCompleted;
     int mTaskCount;//后台任务数
-    int mMinDate;
-    int mMaxDate;
     bool mSaving;
 
    //创建股票信息表
@@ -137,9 +135,9 @@ public:
     Result saveData();
     Result checkData(Stock* stock);
     Result syncToday();
-    Result removeData(int startDate);
+    Result removeData(int startDate,bool removeBehind=true);
     //分析股票数据
-    Result analyseData(Stock* stock);
+    Result analyseData(Stock* stock,int date=0);
     //是否有任务未处理完
     bool isBusy(){return mTaskCount>0||mPool.activeThreadCount()>0;}
     //判断表是否存在

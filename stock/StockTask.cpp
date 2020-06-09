@@ -190,72 +190,8 @@ void SaveDBTask::onFinished()
     for(int i=0;i<stocks.length();++i)stocks[i]->clearDirty();
 }
 
-void AnalyseTask::run()
-{
-    //低量连涨
-    //板块联动
-    //支撑上涨
-    //大单小涨
-    std::chrono::time_point<std::chrono::high_resolution_clock> p0 = std::chrono::high_resolution_clock::now();
-    QDate now = QDate::currentDate();
-    const QList<KData*>& ls = mStock->getValidHistory();
-    for(int i=0,count=ls.size();i<count;++i)
-    {
-        KData* kd = ls[i];
-        kd->change = i<count-1?(kd->close-ls[i+1]->close)/ls[i+1]->close : 0;
-    }
-
-    float lastPrice = ls.empty()?0:ls[0]->close;
-    for(int i=0,count=ls.size();i<count;++i)
-    {
-        KData* kd = ls[i];
-        if(kd->change<0)
-        {
-            data.continueRiseRate = (lastPrice-kd->close)/kd->close;
-            break;
-        }
-        ++data.continueRiseDay;
-    }
-
-    for(int i=0;i<ls.size();++i)
-    {
-         KData* kd = ls[i];
-        //本年
-        if(kd->date/10000 > now.year())continue;
-        if(kd->date/10000 < now.year())break;
-        if(kd->change > 0)
-            ++data.yearUp;
-        else if(kd->change < 0)
-            ++data.yearDown;
-
-        //本月
-        int month = kd->date%10000/100;
-        if(month != now.month())continue;
-        if(kd->change > 0)
-            ++data.monthUp;
-        else if(kd->change < 0)
-            ++data.monthDown;
-
-        //近7天
-        if(i>=7)continue;
-        if(kd->change > 0)
-            ++data.sevenUp;
-        else if(kd->change < 0)
-            ++data.sevenDown;
-    }
-    std::chrono::time_point<std::chrono::high_resolution_clock> p1 = std::chrono::high_resolution_clock::now();
-    float ms = (float)std::chrono::duration_cast<std::chrono::microseconds>(p1 - p0).count() / 1000;
-    qDebug()<<"analyse "<<mStock->code<<"use "<<ms <<"ms";
-    StockMgr::single()->notifyTaskFinished(this);
-}
-
-void AnalyseTask::onFinished()
-{
-    mStock->mAnalyseInfo = data;
-}
-
 void CheckTask::run()
-{;
+{
     //参考股
     Stock* ref = StockMgr::single()->getRefStock();
     const QList<KData*>& refHis = ref->getHistory();
@@ -297,3 +233,93 @@ void CheckTask::onFinished()
 {
     mStock->mCheckInfo = data;
 }
+
+
+void AnalyseTask::run()
+{
+    //低量连涨
+    //板块联动
+    //支撑上涨
+    //大单小涨
+    //分析长牛股特点
+    std::chrono::time_point<std::chrono::high_resolution_clock> p0 = std::chrono::high_resolution_clock::now();
+    QDate now = QDate::currentDate();
+    //=============
+    mStock->calculate();
+    const QList<KData*>& ls = mStock->getValidHistory();
+    int count = ls.count();
+    int start=0;
+    if(date>0)while(start<count&&ls[start]->date>date)++start;
+    if(start>=count)goto exit;
+
+    data.lastKData = ls[start];
+    if(start>0)
+    {//次日结果
+        data.dayResult = ls[start-1]->change;
+    }
+
+    if(start>=7)
+    {//周内结果
+        data.weekResult = (ls[start-7]->close-data.lastKData->close)/data.lastKData->close*100;
+    }
+
+    if(start+1<count)
+    {//放量指标
+        data.volumeRate = ls[start]->volume/ls[start+1]->volume;
+    }
+
+    //近日连涨
+    float lastPrice = ls[start]->close;
+    for(int i=start;i<count;++i)
+    {
+        KData* kd = ls[i];
+        if(kd->change<0)
+        {
+            data.continueRiseRate = (lastPrice-kd->close)/kd->close*100;
+            break;
+        }
+        ++data.continueRiseDay;
+    }
+
+    //年月日涨跌比
+    int year   = data.lastKData->date/10000;
+    int month= data.lastKData->date%10000/100;
+    for(int i=start;i<count;++i)
+    {
+         KData* kd = ls[i];
+        //本年
+        if(kd->date/10000 > year)continue;
+        if(kd->date/10000 < year)break;
+        if(kd->change > 0)
+            ++data.yearUp;
+        else if(kd->change < 0)
+            ++data.yearDown;
+
+        //本月
+        int month = kd->date%10000/100;
+        if(month != month)continue;
+        if(kd->change > 0)
+            ++data.monthUp;
+        else if(kd->change < 0)
+            ++data.monthDown;
+
+        //近7天
+        if(i>=start+7)continue;
+        if(kd->change > 0)
+            ++data.sevenUp;
+        else if(kd->change < 0)
+            ++data.sevenDown;
+    }
+    //=============
+exit:
+    std::chrono::time_point<std::chrono::high_resolution_clock> p1 = std::chrono::high_resolution_clock::now();
+    float ms = (float)std::chrono::duration_cast<std::chrono::microseconds>(p1 - p0).count() / 1000;
+    qDebug()<<"analyse "<<mStock->code<<"use "<<ms <<"ms";
+    StockMgr::single()->notifyTaskFinished(this);
+}
+
+void AnalyseTask::onFinished()
+{
+    mStock->mAnalyseInfo = data;
+}
+

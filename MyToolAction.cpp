@@ -43,5 +43,7 @@ MyToolAction::MyToolAction(QAction* action, QWidget *parent) :QToolButton(parent
  void MyToolAction::onReset()
  {
     setProgress(0);
+    this->defaultAction()->setChecked(false);
+    this->defaultAction()->triggered(false);
     emit sendReset();
  }

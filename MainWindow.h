@@ -27,12 +27,16 @@ class MainWindow : public QMainWindow
         SH,//上市
         HMD,//黑名单
         ZT,//状态
+        FXSJ,//分析时间
+        KZ,//看涨
+        JG,//看涨结果(第2交易日涨幅)
         XJ,//现价
         ZF,//涨幅
         NZDB,//年涨比
         YZDB,//月涨跌比
         RZDB,//7日涨跌比
         LZ,//连涨
+        LB,//量比
     };
 
 public:
@@ -48,6 +52,7 @@ private slots:
     void onActivatedSysTrayIcon(QSystemTrayIcon::ActivationReason reason);
     void onTrayMenuAutoStartTriggered(bool sel);
     void onTrayMenuCloseTriggered();
+    void onTrayMenuConsoleTriggered();
     void onCheckReset(){checkIndex=0;}
     void onAnalyseReset(){analyseIndex=0;}
     void onSafeSyncReset(){syncIndex=0;}
@@ -61,12 +66,17 @@ private slots:
     void on_toolAnalyse_triggered(bool checked);
     void on_toolSafeSync_triggered(bool checked);
     void on_tookCheck_triggered(bool checked);
-    void on_toolRemove_triggered();
+    void on_toolRemoveBehind_triggered();
+    void on_toolRemoveBefore_triggered();
+    void on_toolExport_triggered();
     void on_menuSync_triggered();
     void on_menuCheck_triggered();
     void on_menuAnalyse_triggered();
     void on_menuBlacklist_triggered(bool checked);
     void on_menuReset_triggered();  
+    void on_menuLookUp_triggered();
+    void on_menuLookDown_triggered();
+    void on_pushButton_clicked();
 
 private:
     Ui::MainWindow *ui;
@@ -74,6 +84,7 @@ private:
     Qt::SortOrder* sorts;
     QMenu* tableMenu;
     Stock* selectedStock;
+    int selectedDate;
     int saveTimer;
     int  syncTimer;
     int  syncIndex;

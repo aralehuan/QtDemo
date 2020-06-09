@@ -29,6 +29,7 @@ SOURCES += \
     stock/stockdata.cpp \
     stock/StockMgr.cpp \
     utility/RWLock.cpp \
+    utility/NanoLog.cpp \
     main.cpp \
     MainWindow.cpp \
     KMapWidget.cpp \
@@ -51,6 +52,7 @@ HEADERS += \
     utility/MsgQueue.hpp \
     utility/TimerManager.hpp \
     utility/RWLock.h \
+    utility/NanoLog.hpp \
     MainWindow.h \
     stdafx.h \
     KMapWidget.h \

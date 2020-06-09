@@ -11,6 +11,7 @@ class KMapWidget : public QWidget
     Q_OBJECT
 private:
     Stock* mStock;
+    KData* mSelK;
     int mW;  //k图宽
     int mH;   //k图高
     int mKW;//k节点宽度

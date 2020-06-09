@@ -34,7 +34,6 @@ public:
     float ma20;   //20日均价
     double vma5;   //5日均量
     double vma10; //10日均量
-    double vma20; //20日均量
 
     KData():dirty(false)
     {
@@ -52,6 +51,11 @@ struct AnalyseInfo
     int sevenDown;
     int continueRiseDay;//连续上涨天数
     float continueRiseRate;//连续累计涨幅
+    float volumeRate;//量比(相对昨日)
+    int lookRise;//看涨，负值为看跌
+    float dayResult;  //次日涨幅
+    float weekResult;//周内涨幅
+    KData* lastKData;
     AnalyseInfo()
     {
          memset(this, 0, sizeof(AnalyseInfo));
@@ -68,6 +72,15 @@ struct CheckInfo
     {
          memset(this, 0, sizeof(CheckInfo));
     }
+
+    QString stateString()
+    {
+        QString s;
+        if((state&StockState::DataNotNew)!=0)s.append("旧");
+        if((state&StockState::DataLose)!=0)s.append("缺");
+        if((state&StockState::DataError)!=0)s.append("错");
+        return s;
+    }
 };
 
 
@@ -82,7 +95,7 @@ public:
     QString area;
     QString industry;
     double  total;
-    double  out;
+    double  out;//单位亿
     int     marketTime;//yyyyMMdd
     int     minDate;//日k开始时间
     int     maxDate;//日k结束时间
@@ -122,8 +135,9 @@ public:
     const QList<KData*>& getValidHistory();
     bool save();
     void reset();
+    void calculate();
     void mergeHistory(const QList<KData*>& ls);
-    void removeHistory(int startDate);
+    void removeHistory(int startDate, bool removeBehind=true);
     int market(){return code.startsWith("00")||code.startsWith("30")?1:0;}
     void setDirty(){dirty=true;}
     void clearDirty(){if(waitSave!=nullptr)delete  waitSave;waitSave=nullptr;}

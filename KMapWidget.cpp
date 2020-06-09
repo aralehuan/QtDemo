@@ -5,10 +5,12 @@
 #include <QEvent>
 #include <QFont>
 #include <QVector>
+#include "qcustomplot.h"
 
 KMapWidget::KMapWidget(QWidget *parent) : QWidget(parent)
   ,mKW(9)
   ,mStock(nullptr)
+  ,mSelK(nullptr)
   ,mMark(false)
   ,mPressX(0)
   ,mScrollX(0)
@@ -23,6 +25,8 @@ void KMapWidget::setStock(Stock* stock)
        mLastScrollX =  mScrollX = mPressX  = 0;
     }
     mStock = stock;
+    const QList<KData*>& history = mStock->getValidHistory();
+    emit selectK(history.isEmpty()?nullptr:mSelK=history[0]);
     update();
 }
 
@@ -48,7 +52,8 @@ bool KMapWidget::event(QEvent *event)
 
 void KMapWidget::paintEvent(QPaintEvent * event)
 {
-    QPainter painter(this);
+    QCPPainter painter(this);
+    //QPainter painter(this);
     drawBack(painter);
     if(mStock==nullptr)return;
     const QList<KData*>& history = mStock->getValidHistory();
@@ -92,11 +97,21 @@ void KMapWidget::paintEvent(QPaintEvent * event)
      float x = (leftK-rightK-1)*mKW;
      float halfKW = mKW/2;
      float pixel = 1.0f*mH/(mHigh-mLow);
-     QVector<QLineF> lines;
+     QVector<QLineF> lines5;
+     QVector<QLineF> lines10;
+     QVector<QLineF> lines20;
      const QList<KData*>& history = mStock->getValidHistory();
      for(int i=rightK;i<leftK;++i)
      {
         KData* k = history[i];
+        //选中的k背景
+        if(!mMark && k==mSelK)
+        {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(240,240,240));
+            painter.drawRect(x+1,0, mKW-2, mH);
+        }
+         //绘制k节点
         float up = k->open>k->close?k->open:k->close;
         if(k->close>k->open)
         {
@@ -113,26 +128,36 @@ void KMapWidget::paintEvent(QPaintEvent * event)
             painter.setBrush(Qt::black);
             painter.setPen(Qt::black);
         }
-        //k节点
         painter.drawLine(x+halfKW,(mHigh - k->high)*pixel, x+halfKW, (mHigh - k->low)*pixel);
         painter.drawRect(x+1,(mHigh - up)*pixel, mKW-2, abs(k->close-k->open)*pixel);
-        //当日均价线
+        //当日均价标记
         painter.setPen(Qt::black);
         painter.drawLine(x+halfKW-1,(mHigh - k->avg)*pixel, x+halfKW+1, (mHigh -k->avg)*pixel);
-        //计算5日均线坐标
-        float nextma = i+1<history.count()? history[i+1]->ma5:k->ma5;
-        if(nextma==0)nextma = k->ma5;
-        lines.append(QLineF(x+halfKW, (mHigh - k->ma5)*pixel, x-halfKW,   (mHigh -nextma)*pixel));
+        //计算日均线坐标
+        float nextma5 = i+1<history.count()? history[i+1]->ma5:k->ma5;
+        float nextma10 = i+1<history.count()? history[i+1]->ma10:k->ma10;
+        float nextma20 = i+1<history.count()? history[i+1]->ma20:k->ma20;
+        if(nextma5==0)nextma5 = k->ma5;
+        if(nextma10==0)nextma10 = k->ma10;
+        if(nextma20==0)nextma20 = k->ma20;
+        lines5.append(QLineF(x+halfKW, (mHigh - k->ma5)*pixel, x-halfKW,   (mHigh -nextma5)*pixel));
+        lines10.append(QLineF(x+halfKW, (mHigh - k->ma10)*pixel, x-halfKW,   (mHigh -nextma10)*pixel));
+        lines20.append(QLineF(x+halfKW, (mHigh - k->ma20)*pixel, x-halfKW,   (mHigh -nextma20)*pixel));
         x-=mKW;
      }
+
      //绘制均线
      QPen pen(Qt::SolidLine);
      pen.setWidthF(0.5f);
-     pen.setColor(Qt::blue);
      pen.setJoinStyle(Qt::RoundJoin);
      painter.setPen(pen);
      painter.setRenderHint(QPainter::Antialiasing);
-     painter.drawLines(lines);;
+     painter.setPen(Qt::blue);
+     painter.drawLines(lines5);
+     painter.setPen(Qt::cyan);
+     painter.drawLines(lines10);
+     painter.setPen(Qt::magenta);
+     painter.drawLines(lines20);
      painter.setRenderHint(QPainter::Antialiasing,false);
  }
 
@@ -168,7 +193,18 @@ void KMapWidget::drawMark(QPainter& painter, int rightK, int leftK)
 
     int idx = leftK-mMarkX/mKW-1;
     KData* k = idx<0?nullptr:mStock->getValidHistory()[idx];
-    emit selectK(k);
+    if(k!=nullptr)
+    {
+        painter.setPen(Qt::blue);
+        painter.drawText(0,mH+fontHight, QString().sprintf("MA5:%0.2f", k->ma5));
+        painter.drawText(0,mH+24, QString().sprintf("VMA5:%0.0f", k->vma5));
+        painter.setPen(Qt::cyan);
+        painter.drawText(120,mH+fontHight, QString().sprintf("MA10:%0.2f", k->ma10));
+        painter.drawText(120,mH+24, QString().sprintf("VMA10:%0.0f", k->vma10));
+        painter.setPen(Qt::magenta);
+        painter.drawText(240,mH+fontHight, QString().sprintf("MA20:%0.2f", k->ma20));
+    }
+    emit selectK(mSelK=k);
 }
 
 void KMapWidget::drawVolume(QPainter& painter, int rightK, int leftK)
@@ -179,6 +215,8 @@ void KMapWidget::drawVolume(QPainter& painter, int rightK, int leftK)
     painter.setBrush(Qt::white);
     painter.drawRect(0,0,mW-1,mH2-1);
 
+    QVector<QLineF> lines5;
+    QVector<QLineF> lines10;
     float x = (leftK-rightK-1)*mKW;
     float halfKW = mKW/2;
     float pixel = 1.0f*mH2/mHighVol;
@@ -187,6 +225,14 @@ void KMapWidget::drawVolume(QPainter& painter, int rightK, int leftK)
     for(int i=rightK;i<leftK;++i)
     {
        KData* k = history[i];
+       //选中的k背景
+       if(!mMark && k==mSelK)
+       {
+           painter.setPen(Qt::NoPen);
+           painter.setBrush(QColor(240,240,240));
+           painter.drawRect(x+1,0, mKW-2, mH2);
+       }
+       //量节点
        float up = k->open>k->close?k->open:k->close;
        if(k->close>k->open)
        {
@@ -203,8 +249,14 @@ void KMapWidget::drawVolume(QPainter& painter, int rightK, int leftK)
            painter.setBrush(Qt::black);
            painter.setPen(Qt::black);
        }
-
        painter.drawRect(x+1,mH2-k->volume*pixel, mKW-2, k->volume*pixel);
+       //计算日均量坐标
+       float nextvma5 = i+1<history.count()? history[i+1]->vma5:k->vma5;
+       float nextvma10 = i+1<history.count()? history[i+1]->vma10:k->vma10;
+       if(nextvma5==0)nextvma5 = k->vma5;
+       if(nextvma10==0)nextvma10 = k->vma10;
+       lines5.append(QLineF(x+halfKW, ( mHighVol- k->vma5)*pixel, x-halfKW,   (mHighVol -nextvma5)*pixel));
+       lines10.append(QLineF(x+halfKW, (mHighVol - k->vma10)*pixel, x-halfKW,   (mHighVol -nextvma10)*pixel));
        x-=mKW;
     }
     //标线
@@ -218,6 +270,18 @@ void KMapWidget::drawVolume(QPainter& painter, int rightK, int leftK)
     painter.setPen(Qt::black);
     int fontHight = painter.fontMetrics().height();
     painter.drawText(0,  fontHight, QString::number(mHighVol,'f',2));
+
+    //绘制均线
+    QPen pen(Qt::SolidLine);
+    pen.setWidthF(0.5f);
+    pen.setJoinStyle(Qt::RoundJoin);
+    painter.setPen(pen);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(Qt::blue);
+    painter.drawLines(lines5);
+    painter.setPen(Qt::cyan);
+    painter.drawLines(lines10);
+    painter.setRenderHint(QPainter::Antialiasing,false);
 }
 
 void KMapWidget::mousePressEvent(QMouseEvent *e)

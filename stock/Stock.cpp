@@ -46,7 +46,7 @@ const QList<KData*>& Stock::getHistory()
          k->volume = r.value("volume").toDouble();
          k->amount =  r.value("amount").toDouble();
          k->avg = k->amount/k->volume;
-         k->turnover = out==0?0:k->volume/out;
+         k->turnover = (out==0?0:k->volume/out)*0.000001;
          history.append(k);
          if(k->date>maxDate)maxDate=k->date;
          if(k->date<minDate)minDate=k->date;
@@ -156,7 +156,7 @@ void Stock::mergeHistory(const QList<KData*>& ls)
             history.push_back(k);
             minDate=k->date;
             k->avg = k->amount/k->volume;
-            k->turnover = out==0?0:k->volume/out;
+            k->turnover = (out==0?0:k->volume/out)*0.000001;
             dirty = true;
             k->dirty=true;
         }
@@ -165,7 +165,7 @@ void Stock::mergeHistory(const QList<KData*>& ls)
             history.insert(head++, k);
             if(k->date>maxDate)maxDate=k->date;
             k->avg = k->amount/k->volume;
-            k->turnover = out==0?0:k->volume/out;
+            k->turnover = (out==0?0:k->volume/out)*0.000001;
             dirty = true;
             k->dirty=true;
         }
@@ -184,30 +184,33 @@ void Stock::reset()
     validHistory.clear();
 }
 
-void Stock::removeHistory(int startDate)
+void Stock::removeHistory(int startDate, bool removeBehind)
 {
     getHistory();
     QSqlQuery query(threadDB.getDB());
-    if(!query.exec(QString("delete from X%1 where date >= %2").arg(code).arg(startDate)))return;
-    for(int i=history.size()-1;i>=0;--i)
+    if(removeBehind)
     {
-        if(history[i]->date>=startDate)history.removeAt(i);
+        if(!query.exec(QString("delete from X%1 where date >= %2").arg(code).arg(startDate)))return;
+        for(int i=history.size()-1;i>=0;--i)if(history[i]->date>=startDate)history.removeAt(i);
+        for(int i=validHistory.size()-1;i>=0;--i)if(validHistory[i]->date>=startDate)validHistory.removeAt(i);
+        if(startDate<=minDate)
+        {
+            minDate = 88880808;
+            maxDate=0;
+        }
+        if(history.size()>0)maxDate = history[0]->date;
     }
-
-    for(int i=validHistory.size()-1;i>=0;--i)
+    else
     {
-        if(validHistory[i]->date>=startDate)validHistory.removeAt(i);
-    }
-
-    if(startDate<=minDate)
-    {
-        minDate = 88880808;
-        maxDate=0;
-    }
-
-    if(history.size()>0)
-    {
-        maxDate = history[0]->date;
+        if(!query.exec(QString("delete from X%1 where date <= %2").arg(code).arg(startDate)))return;
+        for(int i=history.size()-1;i>=0;--i)if(history[i]->date<=startDate)history.removeAt(i);
+        for(int i=validHistory.size()-1;i>=0;--i)if(validHistory[i]->date<=startDate)validHistory.removeAt(i);
+        if(startDate>=maxDate)
+        {
+            minDate = 88880808;
+            maxDate=0;
+        }
+        if(history.size()>0)minDate = history[history.size()-1]->date;
     }
     dirty=true;
 }
@@ -229,5 +232,47 @@ void Stock::prepareSave()
          waitSave->history.push_back(k);
     }
     this->dirty=false;
+}
+
+void Stock::calculate()
+{//计算涨幅和均线
+    const QList<KData*>& ls = getValidHistory();
+    for(int i=0,count=ls.size();i<count;++i)
+    {
+        KData* kd = ls[i];
+        //涨幅
+        kd->change = (i<count-1?(kd->close-ls[i+1]->close)/ls[i+1]->close : 0)*100;
+
+        if(i<count-5)
+        {//5日
+            for(int m=0;m<5;++m)
+            {
+                kd->ma5 +=ls[i+m]->avg;
+                kd->vma5+=ls[i+m]->volume;
+            }
+            kd->ma5 /= 5;
+            kd->vma5 /= 5;
+        }
+
+        if(i<count-10)
+        {//10日
+            for(int m=0;m<10;++m)
+            {
+                kd->ma10 +=ls[i+m]->avg;
+                kd->vma10+=ls[i+m]->volume;
+            }
+            kd->ma10 /= 10;
+            kd->vma10 /= 10;
+        }
+
+        if(i<count-20)
+        {//20日
+            for(int m=0;m<20;++m)
+            {
+                kd->ma20 +=ls[i+m]->avg;
+            }
+            kd->ma20 /= 20;
+        }
+    }
 }
 

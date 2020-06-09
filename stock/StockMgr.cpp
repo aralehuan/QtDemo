@@ -14,8 +14,6 @@ StockMgr* StockMgr::mThis = nullptr;
 thread_local ThreadDB threadDB;
 StockMgr::StockMgr()
     :mTaskCount(0)
-    ,mMinDate(0)
-    ,mMaxDate(0)
     ,mSaving(false)
 {
     //线程通信信号槽
@@ -116,14 +114,14 @@ Result StockMgr::checkData(Stock* stock)
     return Result::Ok;
 }
 
-Result StockMgr::analyseData(Stock* stock)
+Result StockMgr::analyseData(Stock* stock,int date)
 {
     if(isBusy())return Result::Busy;
-    startTask(new AnalyseTask(stock,TaskFlag::Analyse));
+    startTask(new AnalyseTask(stock,date,TaskFlag::Analyse));
     return Result::Ok;
 }
 
-Result StockMgr::removeData(int startDate)
+Result StockMgr::removeData(int startDate, bool removeBehind)
 {
     if(isBusy())return Result::Busy;
     Stock* ref = StockMgr::single()->getRefStock();
@@ -134,7 +132,7 @@ Result StockMgr::removeData(int startDate)
     {
         Stock* s = ss[i];
         if(s==ref)continue;
-        s->removeHistory(startDate);
+        s->removeHistory(startDate,removeBehind);
     }
     db.commit();
     return Result::Ok;
@@ -222,9 +220,11 @@ void StockMgr::onTaskFinished(QSharedPointer<StockTask> sharetask)
     StockTask* task = sharetask.get();
     task->onFinished();
     emit sendMessage(TaskCount,"");
-    if(task->mTaskFlag == TaskFlag::SaveDB)
+    switch(task->mTaskFlag)
     {
+    case TaskFlag::SaveDB:
         mSaving=false;
+        break;
     }
 }
 

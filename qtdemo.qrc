@@ -1,18 +1,19 @@
 <RCC>
     <qresource prefix="/toolbar">
         <file>Res/analyse.jpg</file>
-        <file>Res/save.jpg</file>
-        <file>Res/sync.jpg</file>
-        <file>Res/blacklist.jpg</file>
         <file>Res/spyder.png</file>
-        <file>Res/check.jpg</file>
         <file>Res/rabbit.png</file>
+        <file>Res/save.png</file>
+        <file>Res/sync.png</file>
+        <file>Res/blacklist.png</file>
+        <file>Res/check.png</file>
+        <file>Res/export.png</file>
     </qresource>
     <qresource prefix="/gif">
         <file>Res/loading.gif</file>
         <file>Res/saving.gif</file>
     </qresource>
     <qresource prefix="/icon">
-        <file>Res/stock.jpg</file>
+        <file>Res/stock.png</file>
     </qresource>
 </RCC>

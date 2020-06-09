@@ -1,4 +1,4 @@
-#ifndef STAAFX_H
+﻿#ifndef STAAFX_H
 #define STAAFX_H
 #include <QtCore/QVariant>
 #include <QtWidgets/QAction>
@@ -13,4 +13,5 @@
 #include <QtWidgets/QStatusBar>
 #include <QtWidgets/QToolBar>
 #include <QtWidgets/QWidget>
+#include "utility/NanoLog.hpp"
 #endif // STAAFX_H

@@ -73,9 +73,10 @@ public:
 class  AnalyseTask : public StockTask
 {
 protected:
+    int date;//分析某天+以前的数据，这样可以使用第2个交易日的数据做验证
     AnalyseInfo data;
 public:
-    AnalyseTask(Stock* s,int flag):StockTask(s,flag)
+    AnalyseTask(Stock* s,int day, int flag):StockTask(s,flag),date(day)
     {
         mStock->getValidHistory();//防止异步加载，先同步加载
     }
