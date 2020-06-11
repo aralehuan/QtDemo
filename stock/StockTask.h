@@ -58,6 +58,18 @@ public:
     void onFinished();
 };
 
+//分笔数据拉取任务
+class PullTDataTask : public StockTask
+{
+protected:
+    KData* kData;
+    QList<TData>* cach;
+public:
+    PullTDataTask(Stock* s,KData *k, int flag):StockTask(s,flag),kData(k){}
+    void run();
+    void onFinished();
+};
+
 //数据库保存任务
 class SaveDBTask : public StockTask
 {

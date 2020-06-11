@@ -23,6 +23,7 @@ enum TaskFlag
     InitMinDate,
     InitMaxDate,
     SyncData,
+    SyncTData,
     SaveDB,
     Analyse,
     Check,
@@ -32,7 +33,6 @@ enum MsgType
 {
     Info,   //信息日志
     Error, //错误日志
-    MessageBox, //提示框
     TaskCount,//后台任务数
 };
 

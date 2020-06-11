@@ -1,7 +1,15 @@
 ﻿#pragma execution_character_set("utf-8")
+#include <Python.h>
+#include <QJsonDocument>
+#include <QJsonParseError>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QDebug>
 #include "Stock.h"
 #include "StockMgr.h"
-
+#include "StockTask.h"
+#include "utility/NanoLog.hpp"
+extern PyObject* gPythonMod;
 void Stock::createTable(QSqlDatabase& db)
 {
     if(created)return;
@@ -68,6 +76,54 @@ const QList<KData*>& Stock::getValidHistory()
         validHistory.push_back(k);
     }
     return validHistory;
+}
+
+const QList<TData>* Stock::getTData(int date)
+{
+    const QList<KData*> ls =  getValidHistory();
+    for(int i=0;i<ls.size();++i)
+    {
+        KData* k = ls[i];
+        if(k->date!=date)continue;
+        if(k->timeData!=nullptr)return k->timeData;
+
+        //StockMgr::single()->startTask(new PullTDataTask(this,k,TaskFlag::SyncTData));
+        QString sdate = StockMgr::int2StrTime(date);
+        qDebug()<<"req TData code="+code<<",date="<<date;
+        //拉取最新数据
+        PyObject* pyFunc = PyObject_GetAttrString(gPythonMod,"get_ticket_tt");
+        PyObject *pArgs = PyTuple_New(2);
+        PyTuple_SetItem(pArgs, 0, Py_BuildValue("s", code.toLatin1().data()));
+        PyTuple_SetItem(pArgs, 1, Py_BuildValue("s", sdate.toLatin1().data()));
+        PyObject* pyRet  = PyObject_CallObject(pyFunc, pArgs);
+        char* json;
+        PyArg_Parse(pyRet,"s",&json);
+        if(json==nullptr)break;
+        //json数据解析
+        QJsonParseError json_error;
+        QJsonDocument jdoc = QJsonDocument::fromJson(json, &json_error);
+        if(json_error.error != QJsonParseError::NoError)break;
+        QJsonObject rootObj = jdoc.object();
+        QJsonArray datas = rootObj.value("data").toArray();
+        //更新数据
+        k->timeData = new QList<TData>();
+        for(int i=0;i<datas.count();++i)
+        {//头部时间最新
+            QJsonObject data = datas[i].toObject();
+            TData t;
+            t.time = data.value("time").toString().remove(':').toInt();
+            t.price= data.value("price").toVariant().toFloat();
+            t.volume = data.value("volume").toVariant().toDouble();
+            t.amount  = data.value("amount").toVariant().toDouble ();
+            QString s = data.value("type").toVariant().toString();
+            if(s.startsWith("买"))t.side=1;
+            else if(s.startsWith("卖"))t.side=-1;
+            k->timeData->push_back(t);
+        }
+        LOG_INFO <<"pull timedata date="<<date<<" count="<<k->timeData->size();
+        return k->timeData;
+    }
+    return nullptr;
 }
 
 bool Stock::save()

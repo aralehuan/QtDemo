@@ -52,7 +52,6 @@ private slots:
     void onActivatedSysTrayIcon(QSystemTrayIcon::ActivationReason reason);
     void onTrayMenuAutoStartTriggered(bool sel);
     void onTrayMenuCloseTriggered();
-    void onTrayMenuConsoleTriggered();
     void onCheckReset(){checkIndex=0;}
     void onAnalyseReset(){analyseIndex=0;}
     void onSafeSyncReset(){syncIndex=0;}
@@ -77,6 +76,7 @@ private slots:
     void on_menuLookUp_triggered();
     void on_menuLookDown_triggered();
     void on_pushButton_clicked();
+    void on_timeShareBt_clicked();
 
 private:
     Ui::MainWindow *ui;

@@ -158,6 +158,52 @@ void PullStocksTask::onFinished()
     }
 }
 
+void PullTDataTask::run()
+{
+    do
+    {
+        QString date = StockMgr::int2StrTime(kData->date);
+        qDebug()<<"req TData code="+mStock->code<<",date="<<date;
+        //拉取最新数据
+        PyObject* pyFunc = PyObject_GetAttrString(gPythonMod,"get_ticket_tt");
+        PyObject *pArgs = PyTuple_New(2);
+        PyTuple_SetItem(pArgs, 0, Py_BuildValue("s", mStock->code.toLatin1().data()));
+        PyTuple_SetItem(pArgs, 1, Py_BuildValue("s", date.toLatin1().data()));
+        PyObject* pyRet  = PyObject_CallObject(pyFunc, pArgs);
+        char* json;
+        PyArg_Parse(pyRet,"s",&json);
+        if(json==nullptr)break;
+
+        //json数据解析
+        QJsonParseError json_error;
+        QJsonDocument jdoc = QJsonDocument::fromJson(json, &json_error);
+        if(json_error.error != QJsonParseError::NoError)break;
+        QJsonObject rootObj = jdoc.object();
+        QJsonArray datas = rootObj.value("data").toArray();
+        //更新数据
+        cach = new QList<TData>();
+        for(int i=0;i<datas.count();++i)
+        {//头部时间最新
+            QJsonObject data = datas[i].toObject();
+            TData t;
+            t.time = data.value("time").toString().remove(':').toInt();
+            t.price= data.value("price").toVariant().toFloat();
+            t.volume = data.value("volume").toVariant().toDouble();
+            t.amount  = data.value("amount").toVariant().toDouble ();
+            QString s = data.value("side").toVariant().toString();
+            if(s.startsWith( "买"))t.side=1;
+            else if(s.startsWith("卖"))t.side=-1;
+            cach->push_back(t);
+        }
+    }while(0);
+    StockMgr::single()->notifyTaskFinished(this);
+}
+
+void PullTDataTask::onFinished()
+{
+    kData->timeData = cach;
+}
+
 void SaveDBTask::run()
 {
     qDebug()<<"save begin";

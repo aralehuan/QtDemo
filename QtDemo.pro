@@ -38,7 +38,8 @@ SOURCES += \
     LoadingDlg.cpp \
     stock/Stock.cpp \
     stock/StockTask.cpp \
-    MyToolAction.cpp
+    MyToolAction.cpp \
+    TimeShareChart.cpp
 
 
 HEADERS += \
@@ -61,7 +62,8 @@ HEADERS += \
     LoadingDlg.h \
     stock/Stock.h \
     stock/StockTask.h \
-    MyToolAction.h
+    MyToolAction.h \
+    TimeShareChart.h
 
 
 FORMS += \

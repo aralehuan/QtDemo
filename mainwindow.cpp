@@ -53,14 +53,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     a->setCheckable(true);
     a->setChecked(this->getAutoStart());
     QAction* b = new QAction("退出程序", trayMenu);
-    QAction* c = new QAction("控制台", trayMenu);
     trayMenu->addAction(a);
     trayMenu->addAction(b);
-    trayMenu->addAction(c);
     mSysTrayIcon->setContextMenu(trayMenu);
     connect(a, SIGNAL(triggered(bool)), this, SLOT(onTrayMenuAutoStartTriggered(bool)));
     connect(b, SIGNAL(triggered()), this, SLOT(onTrayMenuCloseTriggered()));
-    connect(c, SIGNAL(triggered()), this, SLOT(onTrayMenuConsoleTriggered()));
     //设置风格
     //QString mainStyle("border:1px solid #FF0000;background:rgba(0, 0, 0,100%);color:white;");
     //setStyleSheet("border:1px solid #FF0000;background:rgba(0, 0, 0,100%);color:white;");
@@ -134,6 +131,7 @@ QString MainWindow::toMoney(double money)
 
 void MainWindow::on_k_select(KData* k)
 {
+    ui->timeShareChart->setStockKData(selectedStock,k);
     if(k!=nullptr)
     {
         selectedDate=k->date;
@@ -250,6 +248,12 @@ void MainWindow::on_pushButton_clicked()
     ui->toolAnalyse->setChecked(true);
     analyseTimer = startTimer(100);
     ui->pushButton->setVisible(false);
+}
+
+void MainWindow::on_timeShareBt_clicked()
+{
+    bool isShow = ui->timeShareChart->isVisible();
+    ui->timeShareChart->setVisible(!isShow);
 }
 
 void MainWindow::on_toolRemoveBefore_triggered()
@@ -456,9 +460,6 @@ void MainWindow::onMessage(int type, QString msg)
     case MsgType::TaskCount:
         taskCountLB->setText(QString().sprintf("后台任务数:%d",  StockMgr::single()->getTaskCount()));
         break;
-    case MsgType::MessageBox:
-        QMessageBox::information(this,"tip",msg);
-        break;
     default:
         ui->statusBar->showMessage(msg);
         break;
@@ -546,6 +547,8 @@ void MainWindow::init()
     maxDateLB->setMinimumSize(64,24);
     maxDateLB->setFrameShape(QFrame::Panel);
     maxDateLB->setFrameShadow(QFrame::Sunken);
+    //不显示分笔图
+    ui->timeShareChart->setVisible(false);
 }
 
 bool MainWindow::event(QEvent *event)
@@ -576,6 +579,7 @@ void MainWindow::closeEvent(QCloseEvent * event)
 {//拦截关闭按钮，隐藏程序不退出
     event->ignore();
     this->hide();
+    QApplication::quit();
 }
 
 void MainWindow::timerEvent(QTimerEvent *event)
@@ -645,14 +649,6 @@ void MainWindow::onTrayMenuCloseTriggered()
 {
     this->close();
     QApplication::quit();
-}
-
-void MainWindow::onTrayMenuConsoleTriggered()
-{
-    //const char* cmd ="for /l %a in (0,0,1) do set input= && echo %input%";
-    //system(cmd);
-    //freopen("CON","w",stdout);//将输出定向到控制
-    LOG_INFO<<"log start";
 }
 
 void MainWindow::setAutoStart(bool autoRun)

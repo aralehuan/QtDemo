@@ -18,6 +18,12 @@
   </property>
   <widget class="QWidget" name="centralWidget">
    <layout class="QVBoxLayout" name="verticalLayout">
+    <property name="spacing">
+     <number>2</number>
+    </property>
+    <property name="topMargin">
+     <number>9</number>
+    </property>
     <item>
      <layout class="QHBoxLayout" name="horizontalLayout">
       <item>
@@ -133,7 +139,7 @@
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>160</height>
+          <height>0</height>
          </size>
         </property>
         <property name="maximumSize">
@@ -194,6 +200,29 @@
        </widget>
       </item>
      </layout>
+    </item>
+    <item>
+     <widget class="QPushButton" name="timeShareBt">
+      <property name="maximumSize">
+       <size>
+        <width>16777215</width>
+        <height>10</height>
+       </size>
+      </property>
+      <property name="text">
+       <string>▼</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="TimeShareChart" name="timeShareChart" native="true">
+      <property name="minimumSize">
+       <size>
+        <width>0</width>
+        <height>256</height>
+       </size>
+      </property>
+     </widget>
     </item>
     <item>
      <widget class="QTableWidget" name="stockTable">
@@ -508,6 +537,12 @@
    <class>TimeLineWidget</class>
    <extends>QWidget</extends>
    <header>TimeLineWidget.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>TimeShareChart</class>
+   <extends>QWidget</extends>
+   <header>TimeShareChart.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

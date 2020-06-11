@@ -12,6 +12,20 @@ enum StockState
     DataError    =0x0004,//数据有误
 };
 
+class TData//分笔数据
+{
+public:
+    int time; //成交时间
+    float price;//成交价
+    double volume;//成交量(单位手)
+    double amount;//成交额
+    int side;//1买盘 -1卖盘 0中性盘
+    TData()
+    {
+        memset(this, 0, sizeof(TData));
+    }
+};
+
 class KData
 {
 public:
@@ -34,6 +48,7 @@ public:
     float ma20;   //20日均价
     double vma5;   //5日均量
     double vma10; //10日均量
+    QList<TData>* timeData;
 
     KData():dirty(false)
     {
@@ -133,6 +148,7 @@ public:
     {}
     const QList<KData*>& getHistory();
     const QList<KData*>& getValidHistory();
+    const QList<TData>* getTData(int date);
     bool save();
     void reset();
     void calculate();
